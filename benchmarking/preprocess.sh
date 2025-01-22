@@ -57,12 +57,16 @@ mkdir -p "${output_directory}" || exit 1
 gunzip_scratch_dir="$(mktemp -d -p "${output_directory}")"
 relaxation_scratch_dir="$(mktemp -d -p "${output_directory}")"
 
-while read instance_name; do
+while IFS= read -r instance_name; do
+    
+    # The instance name included a line break "\r from Windows formatting, this fixes it".
+    instance_name=$(echo "$instance_name" | tr -d '\r')
+    
     if [[ "$instance_name" == \#* || -z "$instance_name" ]]; then
         # Skip empty lines and lines starting with "#".
         continue
     fi
-    echo "Processing ${instance_name}"
+    echo "Processing ${instance_name}..."
 
     if [[ convert_fixed_to_free == 1 ]]; then
         gunzip -c "${benchmark_path}/${instance_name}.mps.gz" \

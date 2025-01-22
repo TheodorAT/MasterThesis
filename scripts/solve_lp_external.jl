@@ -23,9 +23,9 @@ import SparseArrays
 import ArgParse
 import HiGHS
 import JSON3
-import JuMP
+import JuMP # This is (one of) the Julia package(s) for mathematical optimization that we compare to.
 import MathOptInterface
-import SCS
+import SCS # This is (one of) the Julia package(s) for mathematical optimization that we compare to.
 
 import FirstOrderLp
 

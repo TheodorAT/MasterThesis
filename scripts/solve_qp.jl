@@ -425,7 +425,7 @@ function parse_command_line()
       "Step size policy used for PDHG. This is ignored for Mirror-prox." *
       " Supported options {constant, adaptive, malitsky-pock}. Defaults" *
       " to 'adaptive'. For the constant step size the solver computes a" *
-      " provably correct step size using power iteration."
+      " probably correct step size using power iteration."
     arg_type = String
     default = "adaptive"
 
@@ -470,6 +470,13 @@ function parse_command_line()
       "a + interpolation_coefficient * (b - a)."
     arg_type = Float64
     default = 1.0
+
+    "--steering_vectors"
+    help = 
+      "Whether or not to use the experimental feature of incorporating steering" * 
+      "vectors into the algorithm. "
+    arg_type = Bool
+    default = false
 
   end
 
@@ -592,6 +599,7 @@ function main()
         termination_criteria,
         restart_params,
         step_size_policy_params,
+        parsed_args["steering_vectors"],
       )
     end
   else

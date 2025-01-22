@@ -81,7 +81,7 @@ SCALING_EXPS_TO_USE = [
 # Which primal-weight experiments to present
 PRIMALWEIGHT_EXPS_TO_USE = [
     "adaptive",
-    #'Fixed 1e-0',
+    # 'Fixed 1e-0',
 ]
 
 # placeholder:
@@ -224,6 +224,7 @@ def solved_problems_vs_xaxis_figs(
     for k, df_k in stats_dfs.items():
         if df_k.empty:
             continue
+        # TODO: Below line is wrong in pandas 2.0, we could downgrade but also rewrite the code to use concat or something similar instead.
         df_k = df_k.append(
             {
                 xaxis: max_xaxis,
@@ -617,7 +618,8 @@ with open("../benchmarking/netlib_benchmark_instance_list") as f:
 netlib_instances = [p.strip() for p in netlib_instances if p[0] != "#"]
 
 # Pull out 'default' (ie best) pdhg implementation to compare against:
-df_default = pd.read_csv(os.path.join(CSV_DIR, "miplib_pdhg_enhanced_100k.csv"))
+df_default = pd.read_csv(os.path.join(
+    CSV_DIR, "miplib_pdhg_enhanced_100k.csv"))
 df_default = fill_in_missing_problems(df_default, miplib_instances)
 
 ######################################################################

@@ -196,6 +196,11 @@ struct PdhgParameters
     AdaptiveStepsizeParams,
     ConstantStepsizeParams,
   }
+
+  """
+  If true, applies steering vectors into the solver algorithm.
+  """
+  steering_vectors::Bool
 end
 
 """
