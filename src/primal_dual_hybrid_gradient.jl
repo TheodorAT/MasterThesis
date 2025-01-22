@@ -1046,7 +1046,7 @@ function optimize(
       )
     end
 
-    take_step(params.step_size_policy_params, problem, solver_state)
+    take_step(params.step_size_policy_params, problem, solver_state) # <<<--------------- This region is where I should start modifying.
 
     time_spent_doing_basic_algorithm +=
       time() - time_spent_doing_basic_algorithm_checkpoint
