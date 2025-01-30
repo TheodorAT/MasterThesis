@@ -1,5 +1,6 @@
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
+DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 FirstOrderLp = "29002642-da4a-11e8-3a94-39bc61281718"
 GZip = "92fee26a-97fe-5a0c-ad85-20a5f3185b63"
 HiGHS = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"

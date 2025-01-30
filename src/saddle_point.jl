@@ -1094,8 +1094,8 @@ function compute_primal_gradient_from_dual_product(
   problem::QuadraticProgrammingProblem,
   primal_solution::AbstractVector{Float64},
   dual_product::AbstractVector{Float64},
-)
-  return problem.objective_matrix * primal_solution .+
+) 
+  return problem.objective_matrix * primal_solution .+ # Note: for LPs: The objective matrix is = 0
          problem.objective_vector .- dual_product
 end
 

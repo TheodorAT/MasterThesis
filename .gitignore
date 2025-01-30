@@ -6,3 +6,4 @@ benchmarking/lp_benchmark
 benchmarking/temp_dir
 results
 tmp
+SVM_l1_reg
