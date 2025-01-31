@@ -17,7 +17,7 @@ fi
 
 echo "Solving trivial lp with ${solver}..."
 
-julia --project=scripts scripts/solve_qp.jl \
+julia --project=scripts scripts/test_solver.jl \
         --instance_path ./test/trivial_lp_model.mps \
         --output_dir ./results/${solver}_solve_trivial_${tolerance} \
         --method "pdhg" \

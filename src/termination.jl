@@ -185,7 +185,7 @@ function optimality_criteria_met(
   else
     error("Unknown optimality_norm")
   end
-
+  # println("Duality gap:", gap)
   return dual_err < abs_tol + rel_tol * dual_err_baseline &&
          primal_err < abs_tol + rel_tol * primal_err_baseline &&
          gap < abs_tol + rel_tol * abs_obj
