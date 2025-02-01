@@ -205,6 +205,11 @@ struct PdhgParameters
   steering_vectors::Bool
 end
 
+struct DwifobParameters
+  gamma::Float64
+  max_memory::Int64
+end
+
 """
 A PdhgSolverState struct specifies the state of the solver.  It is used to
 pass information among the main solver function and other helper functions.
@@ -984,9 +989,10 @@ function squared_norm_M(
   #   exit(1)
   # end
 
-  # Calculating the norm with respect to the calculated M matrix:
   # return x' * M * x # Something was wrong here, I get negative results, it seems as if M is not strongly positive. 
   # FIXME: No, M is not even positive semidefinite, it has negative eigenvalues. Maybe we need different tau and omega?
+  
+  # Calculating the norm with respect to the calculated M matrix:
   return x' * M * x
   
 end
@@ -1008,6 +1014,7 @@ A SaddlePointOutput struct containing the solution found.
 function optimize(
   params::PdhgParameters,
   original_problem::QuadraticProgrammingProblem,
+  dwifob_params::DwifobParameters=nothing,
 )
   validate(original_problem)
   qp_cache = cached_quadratic_program_info(original_problem)
@@ -1045,26 +1052,25 @@ function optimize(
   )
 
   # Initializing DWIFOB solver struct:
-  max_memory = 5
-  gamma = 0.005
+  gamma = dwifob_params.gamma
   x_list = Vector{Vector{Float64}}()
   y_list = Vector{Vector{Float64}}()
   x_hat_list = Vector{Vector{Float64}}()
   y_hat_list = Vector{Vector{Float64}}()
 
   dwifob_solver_state = DwifobSolverState(
-    x_list,             # primal_iterates
-    y_list,             # dual_iterates
-    x_hat_list,         # primal_hat_iterates
-    y_hat_list,         # dual_hat_iterates
-    zeros(primal_size), # current_primal_deviation
-    zeros(dual_size),   # current_dual_deviation
-    max_memory,         # max_memory
-    0,                  # current_iteration
-    1,                  # lambda_k
-    1,                  # lambda_next
-    0.99,               # zeta_k
-    1e-4,               # epsilon
+    x_list,                   # primal_iterates
+    y_list,                   # dual_iterates
+    x_hat_list,               # primal_hat_iterates
+    y_hat_list,               # dual_hat_iterates
+    zeros(primal_size),       # current_primal_deviation
+    zeros(dual_size),         # current_dual_deviation
+    dwifob_params.max_memory, # max_memory
+    0,                        # current_iteration
+    1,                        # lambda_k
+    1,                        # lambda_next
+    0.99,                     # zeta_k
+    1e-4,                     # epsilon
   )
 
   if params.step_size_policy_params isa AdaptiveStepsizeParams
@@ -1074,7 +1080,7 @@ function optimize(
     solver_state.cumulative_kkt_passes += 0.5
     solver_state.step_size = 1.0 / norm(problem.constraint_matrix, Inf)
     solver_state.ratio_step_sizes = 1.0
-  elseif !params.steering_vectors
+  else # if !params.steering_vectors
     desired_relative_error = 0.2
     maximum_singular_value, number_of_power_iterations =
       estimate_maximum_singular_value(
@@ -1085,13 +1091,15 @@ function optimize(
     solver_state.step_size =
       (1 - desired_relative_error) / maximum_singular_value
     solver_state.cumulative_kkt_passes += number_of_power_iterations
-  else # We get here with constant step size and use of steering vectors
-    solver_state.step_size = gamma / norm(problem.constraint_matrix, 2)
-    solver_state.primal_weight = 1 # This sets the dual and primal step sizes to be equal.
-    
-    println("Setting the step size: ", gamma, " for dwifob")
     println("The following should be true: ")
     println(solver_state.step_size * solver_state.step_size * norm(problem.constraint_matrix)^2, " < ", 1)
+  # else # We get here with constant step size and use of steering vectors
+  #   solver_state.step_size = gamma / norm(problem.constraint_matrix, 2)
+  #   solver_state.primal_weight = 1 # This sets the dual and primal step sizes to be equal.
+    
+  #   println("Setting the step size: ", gamma, " for dwifob")
+  #   println("The following should be true: ")
+  #   println(solver_state.step_size * solver_state.step_size * norm(problem.constraint_matrix)^2, " < ", 1)
   end
 
   # Idealized number of KKT passes each time the termination criteria and

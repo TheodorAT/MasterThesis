@@ -72,6 +72,7 @@ function solve_instance_and_output(
   redirect_stdio::Bool,
   transform_bounds::Bool,
   fixed_format_input::Bool,
+  dwifob_parameters::FirstOrderLp.DwifobParameters=nothing, 
 )
   if !isdir(output_dir)
     mkpath(output_dir)
@@ -108,7 +109,7 @@ function solve_instance_and_output(
     end
     running_time = @elapsed begin
       output::FirstOrderLp.SaddlePointOutput =
-        FirstOrderLp.optimize(parameters, lp)
+        FirstOrderLp.optimize(parameters, lp, dwifob_parameters)
     end
     println("Elapsed time: $running_time sec")
 
