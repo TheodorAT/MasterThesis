@@ -10,9 +10,9 @@ INSTANCE="trivial_lp_model"
 instance_path=./test/${INSTANCE}.mps
 experiment_name="trivial_test_fast_${solver}_${tolerance}"
 
-# INSTANCE="nug08-3rd"
-# instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
-# experiment_name="${INSTANCE}_test_fast_${solver}_${tolerance}"
+INSTANCE="nug08-3rd"
+instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
+experiment_name="${INSTANCE}_test_fast_${solver}_${tolerance}"
 
 output_dir="./results/${INSTANCE}"
 output_file_base="${output_dir}/${solver}_solve_trivial_${tolerance}"
