@@ -200,14 +200,15 @@ struct PdhgParameters
   }
 
   """
-  If true, applies steering vectors into the solver algorithm.
+    If true, applies steering vectors into the solver algorithm.
   """
   steering_vectors::Bool
-end
 
-struct DwifobParameters
-  gamma::Float64
-  max_memory::Int64
+  """ 
+    If true, applies the faster version of DWIFOB in the solver algorithm 
+  """
+  fast_dwifob::Bool
+
 end
 
 """
@@ -269,37 +270,16 @@ mutable struct PdhgSolverState
   ratio_step_sizes::Union{Float64,Nothing}
 end
 
-mutable struct DwifobSolverState
-    
-  """
-      The last m_n iterates of the primal, used in the RAA in DWIFOB.
-      Stores x_{n}, x_{n-1}, ... , x_{n-m_n}
-  """
-  primal_iterates::Vector{Vector{Float64}}
-  
-  """
-      The last m_n iterates of the dual, used in the RAA in DWIFOB.
-      Stores my_{n}, my_{n-1}, ... , my_{n-m_n}
-  """
-  dual_iterates::Vector{Vector{Float64}}
-
-  """
-      The last m_n iterates of the primal^{hat}, used in the RAA in DWIFOB.
-      Stores x^{hat}_{n}, x^{hat}_{n-1}, ... , x^{hat}_{n-m_n}
-  """
-  primal_hat_iterates::Vector{Vector{Float64}}
-
-  """
-  The last m_n iterates of the dual^{hat}, used in the RAA in DWIFOB.
-  Stores my^{hat}_{n}, my^{hat}_{n-1}, ... , my^{hat}_{n-m_n}
-  """
-  dual_hat_iterates::Vector{Vector{Float64}}
-
-  current_primal_deviation::Vector{Float64}
-  current_dual_deviation::Vector{Float64}
-
+struct DwifobParameters
+  gamma::Float64
   max_memory::Int64
+end
 
+mutable struct DwifobSolverState
+  
+  # These parameters are static and should maybe be moved to somewhere else. 
+  """ How many terms back in time we use to compute the deviations. """
+  max_memory::Int64
   current_iteration::Int64
   
   lambda_k::Float64
@@ -307,6 +287,60 @@ mutable struct DwifobSolverState
 
   zeta_k::Float64
   epsilon::Float64
+
+  """
+    The last m_n iterates of the primal, used in the RAA in DWIFOB.
+    Stores x_{n}, x_{n-1}, ... , x_{n-m_n}
+  """
+  primal_iterates::Vector{Vector{Float64}}
+  
+  """
+    The last m_n iterates of the dual, used in the RAA in DWIFOB.
+    Stores my_{n}, my_{n-1}, ... , my_{n-m_n}
+  """
+  dual_iterates::Vector{Vector{Float64}}
+
+  """
+    The last m_n iterates of the primal^{hat}, used in the RAA in DWIFOB.
+    Stores x^{hat}_{n}, x^{hat}_{n-1}, ... , x^{hat}_{n-m_n}
+  """
+  x_hat_iterates::Vector{Vector{Float64}}
+
+  """
+    The last m_n iterates of the dual^{hat}, used in the RAA in DWIFOB.
+    Stores my^{hat}_{n}, my^{hat}_{n-1}, ... , my^{hat}_{n-m_n}
+  """
+  y_hat_iterates::Vector{Vector{Float64}}
+
+  current_primal_deviation::Vector{Float64}
+  current_dual_deviation::Vector{Float64}
+
+  """ 
+    Cache for the M matrix, only used with constant step size, 
+    since otherwise this changes every time the step sizes change.
+  """
+  m_matrix::Matrix{Float64}
+
+  # The following parameters are for the more efficient version of DWIFOB steps:
+  
+  """ Storing the history of cached values for K * x_k """
+  K_x_iterates::Vector{Vector{Float64}}  
+  """ Storing the history of cached values for K^T * y_k """
+  K_trans_y_iterates::Vector{Vector{Float64}}
+
+  """ Storing the current value of K * x """
+  K_x_current::Vector{Float64}
+  """ Storing the current value of K^T * y """
+  K_trans_y_current::Vector{Float64}
+
+  """ Storing the current value of K * x_hat """
+  K_x_hat_current::Vector{Float64}
+  """ Storing the current value of K^T * y_hat """
+  K_trans_y_hat_current::Vector{Float64}
+
+  # The deviations: 
+  """ Storing the current value of K * u_x_k """
+  K_u_x_current::Vector{Float64}
 
 end
 
@@ -830,20 +864,18 @@ function take_dwifob_step(
   dwifob_solver_state::DwifobSolverState,
   debugging=false
 )
-  k = dwifob_solver_state.current_iteration
-
-  # Initializing the deviation parts of the algorithm:
-  if k == 0
-    push!(dwifob_solver_state.primal_hat_iterates, solver_state.current_primal_solution)
-    push!(dwifob_solver_state.dual_hat_iterates, solver_state.current_dual_solution)
+  # Initializing the hat variables of the algorithm:
+  if (dwifob_solver_state.current_iteration == 0)
+    push!(dwifob_solver_state.x_hat_iterates, solver_state.current_primal_solution)
+    push!(dwifob_solver_state.y_hat_iterates, solver_state.current_dual_solution)
   end
 
-  m_k = min(dwifob_solver_state.max_memory, k)
+  m_k = min(dwifob_solver_state.max_memory, dwifob_solver_state.current_iteration)
 
   # Extracting some variables from the solver state struct
   # for clearer and more concise code:  
-  x_hat_k = last(dwifob_solver_state.primal_hat_iterates)
-  y_hat_k = last(dwifob_solver_state.dual_hat_iterates)
+  x_hat_k = last(dwifob_solver_state.x_hat_iterates)
+  y_hat_k = last(dwifob_solver_state.y_hat_iterates)
 
   x_k = solver_state.current_primal_solution
   y_k = solver_state.current_dual_solution
@@ -851,9 +883,6 @@ function take_dwifob_step(
   u_x_k = dwifob_solver_state.current_primal_deviation
   u_y_k = dwifob_solver_state.current_dual_deviation
 
-  tau = solver_state.step_size / solver_state.primal_weight
-  sigma = solver_state.step_size * solver_state.primal_weight
-  
   lambda_k = dwifob_solver_state.lambda_k
   lambda_next = dwifob_solver_state.lambda_next
 
@@ -863,23 +892,22 @@ function take_dwifob_step(
   end
 
   # Calculating the primal "pseudogradient" (p_x_k) value:
-  primal_gradient = problem.objective_vector .- problem.constraint_matrix' * y_hat_k
-  p_x_k = x_hat_k - tau .* primal_gradient
+  primal_gradient = problem.objective_vector - problem.constraint_matrix' * y_hat_k
+  p_x_k = x_hat_k - (solver_state.step_size / solver_state.primal_weight) * primal_gradient
   project_primal!(p_x_k, problem)
 
   # Calculating the dual "pseudogradient" (p_y_k) value: 
-  dual_gradient = problem.right_hand_side .- problem.constraint_matrix * (2 .* p_x_k .- x_hat_k)
-  p_y_k = y_hat_k + sigma * dual_gradient
+  dual_gradient = problem.right_hand_side - problem.constraint_matrix * (2 * p_x_k - x_hat_k)
+  p_y_k = y_hat_k + (solver_state.step_size * solver_state.primal_weight) * dual_gradient
   project_dual!(p_y_k, problem)
   
   # Calculating the next iterates:
-  x_next = x_k + lambda_k .* (p_x_k - x_hat_k)
-  y_next = y_k + lambda_k .* (p_y_k - y_hat_k)
+  x_next = x_k + lambda_k * (p_x_k - x_hat_k)
+  y_next = y_k + lambda_k * (p_y_k - y_hat_k)
 
   # Update the solver states: 
   solver_state.current_primal_solution = x_next
   solver_state.current_dual_solution = y_next
-  dwifob_solver_state.current_iteration = k + 1
 
   # Preparing the input for the Regularized Andersson Acceleration:
   push!(dwifob_solver_state.primal_iterates, x_next)
@@ -887,13 +915,13 @@ function take_dwifob_step(
   if (m_k == dwifob_solver_state.max_memory) 
     popfirst!(dwifob_solver_state.primal_iterates)
     popfirst!(dwifob_solver_state.dual_iterates)
-    popfirst!(dwifob_solver_state.primal_hat_iterates)
-    popfirst!(dwifob_solver_state.dual_hat_iterates)
+    popfirst!(dwifob_solver_state.x_hat_iterates)
+    popfirst!(dwifob_solver_state.y_hat_iterates)
   end
 
   # Calculating R_k (linear combination of inertial terms) for the RAA:   
-  R_k_primal = dwifob_solver_state.primal_iterates - dwifob_solver_state.primal_hat_iterates
-  R_k_dual = dwifob_solver_state.dual_iterates - dwifob_solver_state.dual_hat_iterates
+  R_k_primal = dwifob_solver_state.primal_iterates - dwifob_solver_state.x_hat_iterates
+  R_k_dual = dwifob_solver_state.dual_iterates - dwifob_solver_state.y_hat_iterates
   # Converting to matrixes for easier calculations: 
   R_k_primal = reduce(hcat, R_k_primal)
   R_k_dual = reduce(hcat, R_k_dual)
@@ -926,35 +954,271 @@ function take_dwifob_step(
   u_x_next = scaling_factor * u_hat_x_next
   u_y_next = scaling_factor * u_hat_y_next
   
+  # Calculating the hat iterates:
+  x_hat_next = x_next + u_x_next
+  y_hat_next = y_next + u_y_next
+  
+  # Updating the changes in the mutable dwifob struct before the next iteration:
+  dwifob_solver_state.current_iteration = dwifob_solver_state.current_iteration + 1
+
+  dwifob_solver_state.current_primal_deviation = u_x_next
+  dwifob_solver_state.current_dual_deviation = u_y_next
+  push!(dwifob_solver_state.x_hat_iterates, x_hat_next)
+  push!(dwifob_solver_state.y_hat_iterates, y_hat_next)
+
   if debugging
-    println("At iteration: ", k, " we get the following:")
+    println("#######################################")
+    println("### At iteration: ", dwifob_solver_state.current_iteration, " we get the following: ###")
+    println("x_hat_k: ", x_hat_k)
     println("u_x_next: ", u_x_next)
     println("primal gradient: ", primal_gradient)
-    println("")
     println("u_y_next: ", u_y_next)
     println("dual gradient: ", dual_gradient)
+    println("")
     
     println("Scaling factor: ", scaling_factor)
     println("alpha: ", alpha_k)
     println("u_hat_x_next: ", u_hat_x_next)
     println("u_hat_y_next: ", u_hat_y_next)      
     println("l_squared: ", l_squared_k)
-    
     println("")
+
+    println("x_iterates: ", dwifob_solver_state.primal_iterates)
+
+    K = problem.constraint_matrix
+    print("K_x_iterates: [")
+    for iterate in dwifob_solver_state.primal_iterates
+      print(K * iterate, ", ")
+    end
+    print("]\n")
+    println("weighted_K_x_sum: ", K * u_hat_x_deviation_sum)
+    println("")
+
+    println("K_u_hat_x_next: ", K * u_hat_x_next)
+    println("K_u_x_next: ", K * u_x_next)
+    println("K_x_next: ", K * x_next)
+    println("K_x_hat_next: ", K * x_hat_next)
+
+    println("#######################################")
   end
+end
+
+"""
+  Takes a step with constant step size using steering vectors.
+  Modifies the third and fourth arguments: solver_state and dwifob_solver_state.
+  This function uses the fields for previously calculated values of K x and K^T y 
+    in the DwifobSolverState 
+"""
+function take_dwifob_step_efficient(
+  step_params::ConstantStepsizeParams,
+  problem::QuadraticProgrammingProblem,
+  solver_state::PdhgSolverState,
+  dwifob_solver_state::DwifobSolverState,
+  debugging=false
+)
+
+  m_k = min(dwifob_solver_state.max_memory, dwifob_solver_state.current_iteration)
+  
+  # Initializing the hat variables of the algorithm:
+  if (dwifob_solver_state.current_iteration == 0)
+    # Initializing the regular dwifob lists:
+    push!(dwifob_solver_state.x_hat_iterates, solver_state.current_primal_solution)
+    push!(dwifob_solver_state.y_hat_iterates, solver_state.current_dual_solution)
+    
+    # Initializing the cached matrix products:
+    K_x = problem.constraint_matrix * solver_state.current_primal_solution
+    K_trans_y = problem.constraint_matrix' * solver_state.current_dual_solution
+    
+    dwifob_solver_state.K_x_current = K_x
+    dwifob_solver_state.K_trans_y_current = K_trans_y
+    dwifob_solver_state.K_x_hat_current = K_x
+    dwifob_solver_state.K_trans_y_hat_current = K_trans_y
+    dwifob_solver_state.K_u_x_current = [0]
+  end
+
+  # Extracting some variables from the solver state struct
+  # for clearer and more concise code:  
+  x_hat_k = last(dwifob_solver_state.x_hat_iterates)
+  y_hat_k = last(dwifob_solver_state.y_hat_iterates)
+
+  x_k = solver_state.current_primal_solution
+  y_k = solver_state.current_dual_solution
+
+  K_x_k = dwifob_solver_state.K_x_current
+  K_trans_y_k = dwifob_solver_state.K_trans_y_current
+
+  u_x_k = dwifob_solver_state.current_primal_deviation
+  u_y_k = dwifob_solver_state.current_dual_deviation
+
+  lambda_k = dwifob_solver_state.lambda_k
+  lambda_next = dwifob_solver_state.lambda_next
+
+  if isnan(x_hat_k[1]) 
+    println("Got NaN in iterates, aborting...")
+    exit(1)
+  end
+
+  # Calculating the primal "pseudogradient" (p_x_k) value:
+  # primal_gradient = problem.objective_vector .- problem.constraint_matrix' * y_hat_k
+  primal_gradient = problem.objective_vector - dwifob_solver_state.K_trans_y_hat_current
+  tau = solver_state.step_size / solver_state.primal_weight
+  p_x_k = x_hat_k - tau * primal_gradient
+  project_primal!(p_x_k, problem)
+  
+  # Calculating new K matrix product: 
+  K_p_x_k = problem.constraint_matrix * p_x_k
+  
+  # Calculating the dual "pseudogradient" (p_y_k) value: 
+  dual_gradient = problem.right_hand_side - (2 * K_p_x_k) + dwifob_solver_state.K_x_hat_current  
+  sigma = solver_state.step_size * solver_state.primal_weight
+  p_y_k = y_hat_k + sigma * dual_gradient
+  project_dual!(p_y_k, problem)
+  
+  # Calculating new K matrix product: 
+  K_trans_p_y_k = problem.constraint_matrix' * p_y_k
+
+  # Calculating the next iterates:
+  x_next = x_k + lambda_k * (p_x_k - x_hat_k)
+  y_next = y_k + lambda_k * (p_y_k - y_hat_k)
+  # Calculating: K x_next and K^T y_next 
+  K_x_next = K_x_k + lambda_k * (K_p_x_k - dwifob_solver_state.K_x_hat_current)
+  K_trans_y_next = K_trans_y_k + lambda_k * (K_trans_p_y_k - dwifob_solver_state.K_trans_y_hat_current)
+
+  # Update the solver states: 
+  solver_state.current_primal_solution = x_next
+  solver_state.current_dual_solution = y_next  
+  push!(dwifob_solver_state.primal_iterates, x_next)
+  push!(dwifob_solver_state.dual_iterates, y_next)
+  # The cached matrix products: 
+  push!(dwifob_solver_state.K_x_iterates, K_x_next)
+  push!(dwifob_solver_state.K_trans_y_iterates, K_trans_y_next)
+  dwifob_solver_state.K_x_current = K_x_next
+  dwifob_solver_state.K_trans_y_current = K_trans_y_next
+
+  if (m_k == dwifob_solver_state.max_memory) 
+    popfirst!(dwifob_solver_state.primal_iterates)
+    popfirst!(dwifob_solver_state.dual_iterates)
+    popfirst!(dwifob_solver_state.x_hat_iterates)
+    popfirst!(dwifob_solver_state.y_hat_iterates)
+
+    # Handling the cached matrix products:
+    popfirst!(dwifob_solver_state.K_x_iterates)
+    popfirst!(dwifob_solver_state.K_trans_y_iterates)
+  end
+
+  # Preparing the input for the Regularized Andersson Acceleration:
+  # Calculating R_k (linear combination of inertial terms) for the RAA:   
+  R_k_primal = dwifob_solver_state.primal_iterates - dwifob_solver_state.x_hat_iterates
+  R_k_dual = dwifob_solver_state.dual_iterates - dwifob_solver_state.y_hat_iterates
+  # Converting to matrixes for easier calculations: 
+  R_k_primal = reduce(hcat, R_k_primal)
+  R_k_dual = reduce(hcat, R_k_dual)
+  # Finally, forming R_k and calculating the RAA:
+  R_k = vcat(R_k_primal, R_k_dual)
+  alpha_k = calculate_anderson_acceleration(R_k, m_k)
+
+  # Calculating the hat_deviations: 
+  u_hat_x_deviation_sum = zeros(size(x_k))
+  u_hat_y_deviation_sum = zeros(size(y_k))
+  # And weighted sums of cached matrix products: 
+  weighted_K_x_sum = zeros(size(K_x_k))
+  weighted_K_trans_y_sum = zeros(size(K_trans_y_k))
+  for (primal_i, dual_i, alpha_i, K_x_i, K_trans_y_i) in zip(
+    dwifob_solver_state.primal_iterates, 
+    dwifob_solver_state.dual_iterates, 
+    alpha_k, 
+    dwifob_solver_state.K_x_iterates, 
+    dwifob_solver_state.K_trans_y_iterates
+  )
+    u_hat_x_deviation_sum += primal_i * alpha_i
+    u_hat_y_deviation_sum += dual_i * alpha_i
+    weighted_K_x_sum += K_x_i * alpha_i
+    weighted_K_trans_y_sum += K_trans_y_i * alpha_i
+  end 
+  u_hat_x_next = x_next - u_hat_x_deviation_sum
+  u_hat_y_next = y_next - u_hat_y_deviation_sum
+
+  # Calculating the matrix products without matrix multiplication: 
+  K_u_hat_x_next = K_x_next - weighted_K_x_sum
+  K_u_hat_y_next = K_trans_y_next - weighted_K_trans_y_sum
+
+  # Calculating the l^2_k factor: 
+  norm_factor = (2 * lambda_k - 2) / (4 - 2 * lambda_k)
+  norm_argument_x = p_x_k - x_k + norm_factor * u_x_k
+  norm_argument_y = p_y_k - y_k + norm_factor * u_y_k
+
+  norm_argument_K_x = K_p_x_k - K_x_k + norm_factor * dwifob_solver_state.K_u_x_current
+  multiplicative_factor = lambda_k * (4 - 2 * lambda_k) * (4 - 2 * lambda_next) / (4 * lambda_next)
+  l_squared_k = multiplicative_factor * squared_norm_M_fast(norm_argument_x, norm_argument_y, norm_argument_K_x, solver_state)
+
+  # Calculating the deviations for the next iteration:
+  u_next_hat = [u_hat_x_next; u_hat_y_next]
+  scaling_factor = dwifob_solver_state.zeta_k * sqrt(l_squared_k) / (
+    dwifob_solver_state.epsilon + 
+    sqrt(squared_norm_M_fast(u_hat_x_next, u_hat_y_next, K_u_hat_x_next, solver_state))
+  )
+
+  u_x_next = scaling_factor * u_hat_x_next
+  u_y_next = scaling_factor * u_hat_y_next
 
   # Calculating the hat iterates:
   x_hat_next = x_next + u_x_next
   y_hat_next = y_next + u_y_next
-  
+
   # Updating the changes in the mutable dwifob struct before the next iteration:
+  dwifob_solver_state.current_iteration = dwifob_solver_state.current_iteration + 1
+ 
   dwifob_solver_state.current_primal_deviation = u_x_next
   dwifob_solver_state.current_dual_deviation = u_y_next
+  push!(dwifob_solver_state.x_hat_iterates, x_hat_next)
+  push!(dwifob_solver_state.y_hat_iterates, y_hat_next)
+
+  # Calculating the next chached matrix products: 
+  # The deviation vectors: 
+  K_u_x_next = scaling_factor * K_u_hat_x_next 
+  K_trans_u_y_next = scaling_factor * K_u_hat_y_next  
+  # The hat vectors: 
+  K_x_hat_next = K_x_next + K_u_x_next # FIXME: Denna blir fel
+  K_trans_y_hat_next = K_trans_y_next + K_trans_u_y_next
+
+  # Storing the cached matrix products in the struct:
+  dwifob_solver_state.K_u_x_current = K_u_x_next
+  dwifob_solver_state.K_x_hat_current = K_x_hat_next
+  dwifob_solver_state.K_trans_y_hat_current = K_trans_y_hat_next
   
-  push!(dwifob_solver_state.primal_hat_iterates, x_hat_next)
-  push!(dwifob_solver_state.dual_hat_iterates, y_hat_next)
+  if debugging
+    println("#######################################")
+    println("### At iteration: ", dwifob_solver_state.current_iteration, " we get the following: ###")
+    println("x_hat_k: ", x_hat_k)
+    println("u_x_next: ", u_x_next)
+    println("primal gradient: ", primal_gradient)
+    println("u_y_next: ", u_y_next)
+    println("dual gradient: ", dual_gradient)
+    println("")
+    
+    println("Scaling factor: ", scaling_factor)
+    println("alpha: ", alpha_k)
+    println("u_hat_x_next: ", u_hat_x_next)
+    println("u_hat_y_next: ", u_hat_y_next)      
+    println("l_squared: ", l_squared_k)
+    println("")
+
+    println("x_iterates: ", dwifob_solver_state.primal_iterates)
+
+    println("K_x_iterates: ", dwifob_solver_state.K_x_iterates)
+    println("weighted_K_x_sum: ", weighted_K_x_sum)
+    println("")
+
+    println("K_u_hat_x_next: ", K_u_hat_x_next)
+    println("K_u_x_next: ", K_u_x_next)
+    println("K_x_next: ", K_x_next)
+    println("K_x_hat_next: ", K_x_hat_next)
+
+    println("#######################################")
+  end
 end
 
+# TODO: Implement the regularized version of the Anderson Acceleration
 function calculate_anderson_acceleration(
   R_k::Matrix{Float64},
   m_k::Int64,
@@ -979,24 +1243,26 @@ function squared_norm_M(
   sigma = solver_state.step_size * solver_state.primal_weight
   
   M = [1.0I tau*problem.constraint_matrix; tau*problem.constraint_matrix' 1.0I*tau/sigma] 
-  # println("M: ", M) # Looks reasonable. 
-  
-  # Checking the M matrix, is it strictly positive?
-  # eigs = eigvals(collect(M))
-  # println("M eigenvalues: ", eigs)
-  # if eigs[argmin(eigs)] < 0
-  #   println("M not strictly positive, has negative eigenvalue")
-  #   exit(1)
-  # end
-
-  # return x' * M * x # Something was wrong here, I get negative results, it seems as if M is not strongly positive. 
-  # FIXME: No, M is not even positive semidefinite, it has negative eigenvalues. Maybe we need different tau and omega?
   
   # Calculating the norm with respect to the calculated M matrix:
   return x' * M * x
   
 end
 
+""" 
+  Calculates the norm: || [x, y] ||_M 
+  with respect to the M matrix efficiently using cached values of K*x 
+"""
+function squared_norm_M_fast(
+  x::Vector{Float64},
+  y::Vector{Float64},
+  K_x::Vector{Float64},
+  solver_state::PdhgSolverState,
+)
+  tau = solver_state.step_size / solver_state.primal_weight
+  sigma = solver_state.step_size * solver_state.primal_weight
+  return norm(x, 2)^2 + (tau/sigma) * norm(y, 2)^2 + 2 * tau * y' * K_x
+end 
 
 """
 `optimize(params::PdhgParameters,
@@ -1051,28 +1317,6 @@ function optimize(
     nothing,             # ratio_step_sizes
   )
 
-  # Initializing DWIFOB solver struct:
-  gamma = dwifob_params.gamma
-  x_list = Vector{Vector{Float64}}()
-  y_list = Vector{Vector{Float64}}()
-  x_hat_list = Vector{Vector{Float64}}()
-  y_hat_list = Vector{Vector{Float64}}()
-
-  dwifob_solver_state = DwifobSolverState(
-    x_list,                   # primal_iterates
-    y_list,                   # dual_iterates
-    x_hat_list,               # primal_hat_iterates
-    y_hat_list,               # dual_hat_iterates
-    zeros(primal_size),       # current_primal_deviation
-    zeros(dual_size),         # current_dual_deviation
-    dwifob_params.max_memory, # max_memory
-    0,                        # current_iteration
-    1,                        # lambda_k
-    1,                        # lambda_next
-    0.99,                     # zeta_k
-    1e-4,                     # epsilon
-  )
-
   if params.step_size_policy_params isa AdaptiveStepsizeParams
     solver_state.cumulative_kkt_passes += 0.5
     solver_state.step_size = 1.0 / norm(problem.constraint_matrix, Inf)
@@ -1080,7 +1324,7 @@ function optimize(
     solver_state.cumulative_kkt_passes += 0.5
     solver_state.step_size = 1.0 / norm(problem.constraint_matrix, Inf)
     solver_state.ratio_step_sizes = 1.0
-  else # if !params.steering_vectors
+  else # if !params.steering_vectors # FIXME: Make this a setting: params.set_manual_stepsize
     desired_relative_error = 0.2
     maximum_singular_value, number_of_power_iterations =
       estimate_maximum_singular_value(
@@ -1091,16 +1335,53 @@ function optimize(
     solver_state.step_size =
       (1 - desired_relative_error) / maximum_singular_value
     solver_state.cumulative_kkt_passes += number_of_power_iterations
-    println("The following should be true: ")
+    println("The following should be true for M to be strictly positive: ")
     println(solver_state.step_size * solver_state.step_size * norm(problem.constraint_matrix)^2, " < ", 1)
   # else # We get here with constant step size and use of steering vectors
+  #   gamma = dwifob_params.gamma
   #   solver_state.step_size = gamma / norm(problem.constraint_matrix, 2)
   #   solver_state.primal_weight = 1 # This sets the dual and primal step sizes to be equal.
-    
   #   println("Setting the step size: ", gamma, " for dwifob")
   #   println("The following should be true: ")
   #   println(solver_state.step_size * solver_state.step_size * norm(problem.constraint_matrix)^2, " < ", 1)
   end
+
+  # Initializing DWIFOB solver struct:
+  x_list = Vector{Vector{Float64}}()
+  y_list = Vector{Vector{Float64}}()
+  x_hat_list = Vector{Vector{Float64}}()
+  y_hat_list = Vector{Vector{Float64}}()
+
+  K_x_list = Vector{Vector{Float64}}()
+  KT_y_list = Vector{Vector{Float64}}()
+
+  # Initializing the M matrix: 
+  tau = solver_state.step_size / solver_state.primal_weight
+  sigma = solver_state.step_size * solver_state.primal_weight
+  M = [1.0I tau*problem.constraint_matrix; tau*problem.constraint_matrix' 1.0I*tau/sigma] 
+
+  dwifob_solver_state = DwifobSolverState(
+    dwifob_params.max_memory, # max_memory
+    0,                        # current_iteration
+    1,                        # lambda_k
+    1,                        # lambda_next
+    0.99,                     # zeta_k
+    1e-4,                     # epsilon
+    x_list,                   # primal_iterates
+    y_list,                   # dual_iterates
+    x_hat_list,               # primal_hat_iterates
+    y_hat_list,               # dual_hat_iterates
+    zeros(primal_size),       # current_primal_deviation
+    zeros(dual_size),         # current_dual_deviation
+    M,                        # cache of the M matrix
+    K_x_list,                 # list of cached values of K_x 
+    KT_y_list,                # list of cached valued of K^T y
+    [0],                      # cache of K x 
+    [0],                      # cache of K^T y 
+    [0],                      # cache of K x_hat 
+    [0],                      # cache of K^T y_hat 
+    [0],                      # cache of K u_x 
+  )
 
   # Idealized number of KKT passes each time the termination criteria and
   # restart scheme is run. One of these comes from evaluating the gradient at
@@ -1153,7 +1434,7 @@ function optimize(
     # Evaluate the iteration stats at frequency
     # termination_evaluation_frequency, when the iteration_limit is reached,
     # or if a numerical error occurs at the previous iteration.
-    if mod(iteration - 1, termination_evaluation_frequency) == 0 ||
+    if mod(iteration - 1, termination_evaluation_frequency) == 0 || # TODO: Understand this code better, and try to use it to apply restarts to the Dwifob implementation. 
        iteration == iteration_limit + 1 ||
        iteration <= 10 ||
        solver_state.numerical_error
@@ -1279,8 +1560,7 @@ function optimize(
         )
         solver_state.ratio_step_sizes = 1.0
       end
-      if current_iteration_stats.restart_used ==
-         RESTART_CHOICE_RESTART_TO_AVERAGE
+      if current_iteration_stats.restart_used == RESTART_CHOICE_RESTART_TO_AVERAGE
         solver_state.current_dual_product =
           problem.constraint_matrix' * solver_state.current_dual_solution
       end
@@ -1306,7 +1586,11 @@ function optimize(
     end
     
     if params.steering_vectors
-      take_dwifob_step(params.step_size_policy_params, problem, solver_state, dwifob_solver_state) 
+      if params.fast_dwifob
+        take_dwifob_step_efficient(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
+      else
+        take_dwifob_step(params.step_size_policy_params, problem, solver_state, dwifob_solver_state) 
+      end      
     else 
       take_step(params.step_size_policy_params, problem, solver_state)
     end

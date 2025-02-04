@@ -1,21 +1,32 @@
 # Script for testing the DWIFOB solver: 
 
+use_fast="$1"
 # This is the error tolerance to be used in the solver:
 tolerance="1e-4"
-
 # The selected solver: (either pdhg or dwifob)
 solver="dwifob"
 
-# instance_path=./test/trivial_lp_model.mps
-# experiment_name="trivial_test_${solver}_${tolerance}"
+INSTANCE="trivial_lp_model"
+instance_path=./test/${INSTANCE}.mps
+experiment_name="trivial_test_fast_${solver}_${tolerance}"
 
-INSTANCE="nug08-3rd"
-instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
-experiment_name="${INSTANCE}_test_power_step_${solver}_${tolerance}"
+# INSTANCE="nug08-3rd"
+# instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
+# experiment_name="${INSTANCE}_test_fast_${solver}_${tolerance}"
 
-output_dir="./results/trivial_LP"
+output_dir="./results/${INSTANCE}"
 output_file_base="${output_dir}/${solver}_solve_trivial_${tolerance}"
 
+declare -a max_memory_list=(1)
+declare -a step_size_list=("power_iteration") 
+
+# Bulding a string for the max memory input to the julia program: 
+max_memory_input="["
+for max_memory in "${max_memory_list[@]}" 
+do
+  max_memory_input="${max_memory_input}${max_memory}, "
+done
+max_memory_input="${max_memory_input::-2}]"
 
 if [ "$solver" == "pdhg" ]; then
   use_steering="false"
@@ -39,21 +50,14 @@ julia --project=scripts scripts/test_solver.jl \
         --pock_chambolle_rescaling false \
         --scale_invariant_initial_primal_weight false \
         --step_size_policy "constant" \
+        --iteration_limit 5000 \
         --steering_vectors ${use_steering} \
-        --iteration_limit 5000
+        --max_memory "${max_memory_input}" \
+        --fast_dwifob ${use_fast}
 
 echo "Problems solved, storing data in csv format..."
-
 # Creating the JSON for collecting the results using another Julia Script:
 json_content='{"datasets": ['
-
-# declare -a step_size_list=(0.99 0.5 0.1 0.05 0.01 0.005) 
-# declare -a max_memory_list=(1 2 3 5 10)
-
-# NOTE: When changing these lists: 
-# NOTE: do not forget to change the ones in test_solver.jl as well.
-declare -a max_memory_list=(1 2 3 5 10 15)
-declare -a step_size_list=("power_iteration") 
 
 for max_memory in "${max_memory_list[@]}" 
 do
