@@ -1063,7 +1063,6 @@ function take_dwifob_step_efficient(
   end
 
   # Calculating the primal "pseudogradient" (p_x_k) value:
-  # primal_gradient = problem.objective_vector .- problem.constraint_matrix' * y_hat_k
   primal_gradient = problem.objective_vector - dwifob_matrix_cache.K_trans_y_hat_current
   tau = solver_state.step_size / solver_state.primal_weight
   p_x_k = x_hat_k - tau * primal_gradient
@@ -1182,7 +1181,7 @@ function take_dwifob_step_efficient(
   K_u_x_next = scaling_factor * K_u_hat_x_next 
   K_trans_u_y_next = scaling_factor * K_u_hat_y_next  
   # The hat vectors: 
-  K_x_hat_next = K_x_next + K_u_x_next # FIXME: Denna blir fel
+  K_x_hat_next = K_x_next + K_u_x_next 
   K_trans_y_hat_next = K_trans_y_next + K_trans_u_y_next
 
   # Storing the cached matrix products in the struct:
