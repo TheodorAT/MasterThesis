@@ -1,23 +1,25 @@
 # Script for testing the DWIFOB solver: 
 
 use_fast=true
+use_steering="true"
 # This is the error tolerance to be used in the solver:
 tolerance="1e-4"
-# The selected solver: (either pdhg or dwifob)
+# The selected solver: (different versions of dwifob) available options: 
+# "dwifob", (In the future: "+restarts", "+scaling", "primal_weight", "+step_size")
 solver="dwifob"
 
+# Select the instance: 
 # INSTANCE="trivial_lp_model"
 # instance_path=./test/${INSTANCE}.mps
 # experiment_name="trivial_test_fast_${solver}_${tolerance}"
-
 INSTANCE="nug08-3rd"
 instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
-experiment_name="${INSTANCE}_test_fast_${solver}_${tolerance}_PDLPscaling"
+experiment_name="${INSTANCE}_test_fast_${solver}_${tolerance}"
 
 output_dir="./results/${INSTANCE}"
 output_file_base="${output_dir}/${solver}_solve_trivial_${tolerance}"
 
-declare -a max_memory_list=(1 2 3 4 5 5 8 10 14)
+declare -a max_memory_list=(1 2 3 4 5 10 15 20 30) 
 
 # Bulding a string for the max memory input to the julia program: 
 max_memory_input="["
@@ -27,45 +29,85 @@ do
 done
 max_memory_input="${max_memory_input::-2}]"
 
-if [ "$solver" == "pdhg" ]; then
-  use_steering="false"
-elif [ "$solver" == "dwifob" ]; then
-  use_steering="true"
-else
-  echo "Invalid solver used"
-  return
-fi
-
 echo "Solving ${INSTANCE} with ${solver}..."
 
-# julia --project=scripts scripts/test_solver.jl \
-#         --instance_path $instance_path \
-#         --output_dir $output_file_base \
-#         --method "pdhg" \
-#         --relative_optimality_tol ${tolerance} \
-#         --absolute_optimality_tol ${tolerance} \
-#         --restart_scheme "no_restart" \
-#         --l_inf_ruiz_iterations 0 \
-#         --pock_chambolle_rescaling false \
-#         --scale_invariant_initial_primal_weight false \
-#         --step_size_policy "constant" \
-#         --iteration_limit 5000 \
-#         --steering_vectors ${use_steering} \
-#         --max_memory "${max_memory_input}" \
-#         --fast_dwifob ${use_fast}
-
-julia --project=scripts scripts/test_solver.jl \
+if [ "$solver" == "dwifob" ]; then # This is the baseline vanilla dwifob:   
+  julia --project=scripts scripts/test_solver.jl \
         --instance_path $instance_path \
         --output_dir $output_file_base \
         --method "pdhg" \
         --relative_optimality_tol ${tolerance} \
         --absolute_optimality_tol ${tolerance} \
-        --restart_scheme "no_restart" \
+        --iteration_limit 5000 \
         --step_size_policy "constant" \
+        --l_inf_ruiz_iterations 0 \
+        --pock_chambolle_rescaling false \
+        --l2_norm_rescaling false \
+        --restart_scheme "no_restart" \
+        --primal_weight_update_smoothing 0.0 \
+        --scale_invariant_initial_primal_weight false \
+        --steering_vectors ${use_steering} \
+        --max_memory "${max_memory_input}" \
+        --fast_dwifob ${use_fast}
+
+elif [ "$solver" == "+restarts" ]; then
+   julia --project=scripts scripts/test_solver.jl \
+        --instance_path $instance_path \
+        --output_dir $output_dir \
+        --method "pdhg" \
+        --relative_optimality_tol ${tolerance} \
+        --absolute_optimality_tol ${tolerance} \
+        --iteration_limit 5000 \
+        --step_size_policy constant \
+        --l_inf_ruiz_iterations 0 \
+        --pock_chambolle_rescaling false \
+        --l2_norm_rescaling false \
+        --primal_weight_update_smoothing 0.0 \
+        --scale_invariant_initial_primal_weight false \
+        --steering_vectors ${use_steering} \
+        --max_memory "${max_memory_input}" \
+        --fast_dwifob ${use_fast}
+
+elif [ "$solver" == "+scaling" ]; then
+   julia --project=scripts scripts/test_solver.jl \
+        --instance_path $instance_path \
+        --output_dir $output_dir \
+        --method "pdhg" \
+        --relative_optimality_tol ${tolerance} \
+        --absolute_optimality_tol ${tolerance} \
+        --iteration_limit 5000 \
+        --step_size_policy constant \
+        --primal_weight_update_smoothing 0.0 \
+        --scale_invariant_initial_primal_weight false \
+        --steering_vectors ${use_steering} \
+        --max_memory "${max_memory_input}" \
+        --fast_dwifob ${use_fast}
+        
+elif [ "$solver" == "+primal_weight" ]; then
+   julia --project=scripts scripts/test_solver.jl \
+        --instance_path $instance_path \
+        --output_dir $output_dir \
+        --method "pdhg" \
+        --relative_optimality_tol ${tolerance} \
+        --absolute_optimality_tol ${tolerance} \
+        --iteration_limit 5000 \
+        --step_size_policy constant \
+        --steering_vectors ${use_steering} \
+        --max_memory "${max_memory_input}" \
+        --fast_dwifob ${use_fast}
+
+elif [ "$solver" == "+step_size" ]; then
+   julia --project=scripts scripts/test_solver.jl \
+        --instance_path $instance_path \
+        --output_dir $output_dir \
+        --method "pdhg" \
+        --relative_optimality_tol ${tolerance} \
+        --absolute_optimality_tol ${tolerance} \
         --iteration_limit 5000 \
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
         --fast_dwifob ${use_fast}
+fi
 
 echo "Problems solved, storing data in csv format..."
 # Creating the JSON for collecting the results using another Julia Script:
