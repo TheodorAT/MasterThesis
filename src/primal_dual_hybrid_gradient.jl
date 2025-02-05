@@ -271,7 +271,6 @@ mutable struct PdhgSolverState
 end
 
 struct DwifobParameters
-  gamma::Float64
   max_memory::Int64
 end
 
@@ -954,9 +953,12 @@ function take_dwifob_step(
   x_hat_next = x_next + u_x_next
   y_hat_next = y_next + u_y_next
   
+  # Each iteration of this dwifob implementation calculates a matrix calculation 
+  # using the constraint matrix: K: 3 times, and K^T 3 times. (1 each for steps, 1 each for the 2 M-norms) 
+  solver_state.cumulative_kkt_passes += 3
+  
   # Updating the changes in the mutable dwifob struct before the next iteration:
   dwifob_solver_state.current_iteration = dwifob_solver_state.current_iteration + 1
-
   dwifob_solver_state.current_primal_deviation = u_x_next
   dwifob_solver_state.current_dual_deviation = u_y_next
   push!(dwifob_solver_state.x_hat_iterates, x_hat_next)
@@ -1005,7 +1007,11 @@ end
   This function uses the fields for previously calculated values of K x and K^T y 
     in the DwifobSolverState 
 """
-function take_dwifob_step_efficient(
+# TODO: Implement different versions of DWIFOB:
+#    - One where p_x_k and p_y_k are inputted to the RAA instead <<-- This one seems more reasonable than Original DWIFOB according to Pontus. 
+#    - One where we take the min(1, multiplicative_factor) instead of just multiplying with multiplicative_factor <<-- This one is more inspired by NOFOB. 
+#    - One with both. Maybe the best of two worlds? 
+function take_dwifob_step_efficient(  
   step_params::ConstantStepsizeParams,
   problem::QuadraticProgrammingProblem,
   solver_state::PdhgSolverState,
@@ -1025,18 +1031,21 @@ function take_dwifob_step_efficient(
     # Initializing the cached matrix products:
     K_x = problem.constraint_matrix * solver_state.current_primal_solution
     K_trans_y = problem.constraint_matrix' * solver_state.current_dual_solution
+    # Keeping track of the KKT passes: 
+    solver_state.cumulative_kkt_passes += 1
     
-    println("K_x dimensions: ", size(K_x, 1))
     dwifob_matrix_cache.K_x_current = K_x
     dwifob_matrix_cache.K_trans_y_current = K_trans_y
     dwifob_matrix_cache.K_x_hat_current = K_x
     dwifob_matrix_cache.K_trans_y_hat_current = K_trans_y
-
+    
     K_u_x = 0 .* K_x      
     # FIXME: HACK This above is ugly and we want to do it better, with zeros instead. 
     # Idea below but does not work yet.
     # K_u_x = zeros(Float64, size(K_x, 1), 1) 
-    println("K_u_k_cur dimensions: ", size(K_u_x))
+    
+    # println("K_x dimensions: ", size(K_x, 1))
+    # println("K_u_k_cur dimensions: ", size(K_u_x))
     dwifob_matrix_cache.K_u_x_current = K_u_x
   end
 
@@ -1088,6 +1097,9 @@ function take_dwifob_step_efficient(
   K_trans_y_next = K_trans_y_k + lambda_k * (K_trans_p_y_k - dwifob_matrix_cache.K_trans_y_hat_current)
 
   # Update the solver states: 
+  # Keeping track of the KKT passes: 
+  solver_state.cumulative_kkt_passes += 1
+  # The primal and dual solutions: 
   solver_state.current_primal_solution = x_next
   solver_state.current_dual_solution = y_next  
   push!(dwifob_solver_state.primal_iterates, x_next)
@@ -1229,6 +1241,8 @@ function calculate_anderson_acceleration(
   if m_k == 0
     return [1.0]
   else      
+    # TODO: Solve this using prox-iterations
+    # TODO: Solve this using "\" solve in julia instead
     R_RT_inverse = inv(R_k' * R_k + 1e-4 * 1.0I) # FIXME: Temporary solution to handle singular matrixes
     ones_corr_dim = ones(size(R_RT_inverse)[1], 1) 
     alpha = (R_RT_inverse * ones_corr_dim) / (ones_corr_dim' * R_RT_inverse * ones_corr_dim)
@@ -1283,7 +1297,7 @@ A SaddlePointOutput struct containing the solution found.
 function optimize(
   params::PdhgParameters,
   original_problem::QuadraticProgrammingProblem,
-  dwifob_params::DwifobParameters=nothing,
+  dwifob_params::Union{DwifobParameters, Nothing}=nothing,
 )
   validate(original_problem)
   qp_cache = cached_quadratic_program_info(original_problem)
@@ -1327,8 +1341,8 @@ function optimize(
     solver_state.cumulative_kkt_passes += 0.5
     solver_state.step_size = 1.0 / norm(problem.constraint_matrix, Inf)
     solver_state.ratio_step_sizes = 1.0
-  else # if !params.steering_vectors # FIXME: Make this a setting: params.set_manual_stepsize
-    desired_relative_error = 0.2
+  else 
+    desired_relative_error = 0.2 # TODO: Can we increase performance by using values closer to 0? 0.01?
     maximum_singular_value, number_of_power_iterations =
       estimate_maximum_singular_value(
         problem.constraint_matrix,
@@ -1338,52 +1352,51 @@ function optimize(
     solver_state.step_size =
       (1 - desired_relative_error) / maximum_singular_value
     solver_state.cumulative_kkt_passes += number_of_power_iterations
+    # The opnorm is the correct one to use here, julia has a different implementation for the norm(). 
+    println("Calculated ||K|| using norm: ", opnorm(problem.constraint_matrix, 2)) 
+    println("Maximum singular value using power iteration: ", maximum_singular_value)
     println("The following should be true for M to be strictly positive: ")
-    println(solver_state.step_size * solver_state.step_size * norm(problem.constraint_matrix)^2, " < ", 1)
-  # else # We get here with constant step size and use of steering vectors
-  #   gamma = dwifob_params.gamma
-  #   solver_state.step_size = gamma / norm(problem.constraint_matrix, 2)
-  #   solver_state.primal_weight = 1 # This sets the dual and primal step sizes to be equal.
-  #   println("Setting the step size: ", gamma, " for dwifob")
-  #   println("The following should be true: ")
-  #   println(solver_state.step_size * solver_state.step_size * norm(problem.constraint_matrix)^2, " < ", 1)
+    println("Regular norm: ", solver_state.step_size * solver_state.step_size * norm(problem.constraint_matrix, 2)^2, " < ", 1)
+    println("Max Singular Val with power iteration: ", solver_state.step_size * solver_state.step_size * maximum_singular_value^2, " < ", 1)
   end
 
-  # Initializing DWIFOB solver struct:
-  x_list = Vector{Vector{Float64}}()
-  y_list = Vector{Vector{Float64}}()
-  x_hat_list = Vector{Vector{Float64}}()
-  y_hat_list = Vector{Vector{Float64}}()
-
-  dwifob_solver_state = DwifobSolverState(
-    dwifob_params.max_memory, # max_memory
-    0,                        # current_iteration
-    1,                        # lambda_k
-    1,                        # lambda_next
-    0.99,                     # zeta_k
-    1e-4,                     # epsilon
-    x_list,                   # primal_iterates
-    y_list,                   # dual_iterates
-    x_hat_list,               # primal_hat_iterates
-    y_hat_list,               # dual_hat_iterates
-    zeros(primal_size),       # current_primal_deviation
-    zeros(dual_size),         # current_dual_deviation
-  )
-
-  # Initializing the matrix cache:
-  K_x_list = Vector{Vector{Float64}}()
-  KT_y_list = Vector{Vector{Float64}}()
-
-  dwifob_matrix_cache = DwifobMatrixCache(
-    K_x_list,                 # list of cached values of K_x 
-    KT_y_list,                # list of cached valued of K^T y
-    [0],                      # cache of K x 
-    [0],                      # cache of K^T y 
-    [0],                      # cache of K x_hat 
-    [0],                      # cache of K^T y_hat 
-    [0],                      # cache of K u_x 
-  )
-
+  if !(dwifob_params isa Nothing)
+    # Initializing DWIFOB solver struct:
+    x_list = Vector{Vector{Float64}}()
+    y_list = Vector{Vector{Float64}}()
+    x_hat_list = Vector{Vector{Float64}}()
+    y_hat_list = Vector{Vector{Float64}}()
+    
+    dwifob_solver_state = DwifobSolverState(
+      dwifob_params.max_memory, # max_memory
+      0,                        # current_iteration
+      1,                        # lambda_k
+      1,                        # lambda_next
+      0.99,                     # zeta_k
+      1e-4,                     # epsilon
+      x_list,                   # primal_iterates
+      y_list,                   # dual_iterates
+      x_hat_list,               # primal_hat_iterates
+      y_hat_list,               # dual_hat_iterates
+      zeros(primal_size),       # current_primal_deviation
+      zeros(dual_size),         # current_dual_deviation
+    )
+    
+    # Initializing the matrix cache:
+    K_x_list = Vector{Vector{Float64}}()
+    KT_y_list = Vector{Vector{Float64}}()
+    
+    dwifob_matrix_cache = DwifobMatrixCache(
+      K_x_list,                 # list of cached values of K_x 
+      KT_y_list,                # list of cached valued of K^T y
+      [0],                      # cache of K x 
+      [0],                      # cache of K^T y 
+      [0],                      # cache of K x_hat 
+      [0],                      # cache of K^T y_hat 
+      [0],                      # cache of K u_x 
+    )
+  end  
+        
   # Idealized number of KKT passes each time the termination criteria and
   # restart scheme is run. One of these comes from evaluating the gradient at
   # the average solution and evaluating the gradient at the current solution.

@@ -72,7 +72,7 @@ function solve_instance_and_output(
   redirect_stdio::Bool,
   transform_bounds::Bool,
   fixed_format_input::Bool,
-  dwifob_parameters::FirstOrderLp.DwifobParameters=nothing, 
+  dwifob_parameters::Union{FirstOrderLp.DwifobParameters, Nothing}=nothing, 
 )
   if !isdir(output_dir)
     mkpath(output_dir)
@@ -611,7 +611,7 @@ function process_args(parsed_args)
         termination_criteria,
         restart_params,
         step_size_policy_params,
-        parsed_args["steering_vectors"], #TODO: Clean this up, separate steering vector parameters into DwifobParameters struct instead.
+        parsed_args["steering_vectors"], #FIXME: Clean this up, separate steering vector parameters into DwifobParameters struct instead.
         parsed_args["fast_dwifob"],
       )
     end
