@@ -13,6 +13,7 @@
 # limitations under the License.
 
 using LinearAlgebra
+using JSON3
 
 """
 Parameters of the Malitsky and Pock lineseach algorithm
@@ -1017,13 +1018,14 @@ function take_dwifob_step_efficient(
   solver_state::PdhgSolverState,
   dwifob_solver_state::DwifobSolverState,
   dwifob_matrix_cache::DwifobMatrixCache,
-  debugging=false
+  didRestart=false,
+  debugging=false,
 )
 
   m_k = min(dwifob_solver_state.max_memory, dwifob_solver_state.current_iteration)
   
   # Initializing the hat variables of the algorithm:
-  if (dwifob_solver_state.current_iteration == 0)
+  if (dwifob_solver_state.current_iteration == 0 || didRestart)
     # Initializing the regular dwifob lists:
     push!(dwifob_solver_state.x_hat_iterates, solver_state.current_primal_solution)
     push!(dwifob_solver_state.y_hat_iterates, solver_state.current_dual_solution)
@@ -1281,6 +1283,48 @@ function squared_norm_M_fast(
   return norm(x, 2)^2 + (tau/sigma) * norm(y, 2)^2 + 2 * tau * y' * K_x
 end 
 
+function initialize_dwifob_state(
+  dwifob_params::DwifobParameters,
+  primal_size::Int64,
+  dual_size::Int64,
+)
+  # Initializing DWIFOB solver struct:
+  x_list = Vector{Vector{Float64}}()
+  y_list = Vector{Vector{Float64}}()
+  x_hat_list = Vector{Vector{Float64}}()
+  y_hat_list = Vector{Vector{Float64}}()
+  
+  dwifob_solver_state = DwifobSolverState(
+    dwifob_params.max_memory, # max_memory
+    0,                        # current_iteration
+    1,                        # lambda_k
+    1,                        # lambda_next
+    0.99,                     # zeta_k
+    1e-4,                     # epsilon
+    x_list,                   # primal_iterates
+    y_list,                   # dual_iterates
+    x_hat_list,               # primal_hat_iterates
+    y_hat_list,               # dual_hat_iterates
+    zeros(primal_size),       # current_primal_deviation
+    zeros(dual_size),         # current_dual_deviation
+  )
+  
+  # Initializing the matrix cache:
+  K_x_list = Vector{Vector{Float64}}()
+  KT_y_list = Vector{Vector{Float64}}()
+  
+  dwifob_matrix_cache = DwifobMatrixCache(
+    K_x_list,                 # list of cached values of K_x 
+    KT_y_list,                # list of cached valued of K^T y
+    [0],                      # cache of K x 
+    [0],                      # cache of K^T y 
+    [0],                      # cache of K x_hat 
+    [0],                      # cache of K^T y_hat 
+    [0],                      # cache of K u_x 
+  )
+  return dwifob_solver_state, dwifob_matrix_cache
+end
+
 """
 `optimize(params::PdhgParameters,
           original_problem::QuadraticProgrammingProblem)`
@@ -1298,6 +1342,7 @@ function optimize(
   params::PdhgParameters,
   original_problem::QuadraticProgrammingProblem,
   dwifob_params::Union{DwifobParameters, Nothing}=nothing,
+  output_file = nothing
 )
   validate(original_problem)
   qp_cache = cached_quadratic_program_info(original_problem)
@@ -1353,48 +1398,14 @@ function optimize(
       (1 - desired_relative_error) / maximum_singular_value
     solver_state.cumulative_kkt_passes += number_of_power_iterations
     # The opnorm is the correct one to use here, julia has a different implementation for the norm(). 
-    println("Calculated ||K|| using norm: ", opnorm(problem.constraint_matrix, 2)) 
-    println("Maximum singular value using power iteration: ", maximum_singular_value)
+    # OPNORM NOT IMPLEMENTED FOR SPARSE IN JULLIA, therefore we use maximum singular value instead! 
+    # println("Calculated ||K|| using norm: ", opnorm(problem.constraint_matrix, 2)) 
     println("The following should be true for M to be strictly positive: ")
-    println("Regular norm: ", solver_state.step_size * solver_state.step_size * norm(problem.constraint_matrix, 2)^2, " < ", 1)
-    println("Max Singular Val with power iteration: ", solver_state.step_size * solver_state.step_size * maximum_singular_value^2, " < ", 1)
+    println(solver_state.step_size * solver_state.step_size * maximum_singular_value^2, " < ", 1)
   end
 
   if !(dwifob_params isa Nothing)
-    # Initializing DWIFOB solver struct:
-    x_list = Vector{Vector{Float64}}()
-    y_list = Vector{Vector{Float64}}()
-    x_hat_list = Vector{Vector{Float64}}()
-    y_hat_list = Vector{Vector{Float64}}()
-    
-    dwifob_solver_state = DwifobSolverState(
-      dwifob_params.max_memory, # max_memory
-      0,                        # current_iteration
-      1,                        # lambda_k
-      1,                        # lambda_next
-      0.99,                     # zeta_k
-      1e-4,                     # epsilon
-      x_list,                   # primal_iterates
-      y_list,                   # dual_iterates
-      x_hat_list,               # primal_hat_iterates
-      y_hat_list,               # dual_hat_iterates
-      zeros(primal_size),       # current_primal_deviation
-      zeros(dual_size),         # current_dual_deviation
-    )
-    
-    # Initializing the matrix cache:
-    K_x_list = Vector{Vector{Float64}}()
-    KT_y_list = Vector{Vector{Float64}}()
-    
-    dwifob_matrix_cache = DwifobMatrixCache(
-      K_x_list,                 # list of cached values of K_x 
-      KT_y_list,                # list of cached valued of K^T y
-      [0],                      # cache of K x 
-      [0],                      # cache of K^T y 
-      [0],                      # cache of K x_hat 
-      [0],                      # cache of K^T y_hat 
-      [0],                      # cache of K u_x 
-    )
+    (dwifob_solver_state, dwifob_matrix_cache) = initialize_dwifob_state(dwifob_params, primal_size, dual_size)
   end  
         
   # Idealized number of KKT passes each time the termination criteria and
@@ -1441,6 +1452,10 @@ function optimize(
   solver_state.numerical_error = false
   display_iteration_stats_heading(params.verbosity)
 
+  # For plotting: 
+  iterate_plot_info = Vector{Float64}()
+  duality_gap_plot_info = Vector{Float64}()
+  did_dwifob_restart = false
   iteration = 0
   while true
     iteration += 1
@@ -1484,6 +1499,22 @@ function optimize(
         solver_state.primal_weight,
         POINT_TYPE_AVERAGE_ITERATE,
       )
+      # Storing values for plotting: FIXME: Do we need higher resolution for this, or is every 40 points enough? 
+      # Is this what we want?
+      twice = false
+      for convergence_information in current_iteration_stats.convergence_information
+        ci = convergence_information
+        gap = abs(ci.primal_objective - ci.dual_objective)
+        
+        push!(iterate_plot_info, iteration)
+        push!(duality_gap_plot_info, gap)
+        
+        if twice
+          println("At iteration: ", iteration, "we get here twice, this should not happen")
+        end
+        twice = true
+      end
+
       method_specific_stats = current_iteration_stats.method_specific_stats
       method_specific_stats["time_spent_doing_basic_algorithm"] =
         time_spent_doing_basic_algorithm
@@ -1541,6 +1572,19 @@ function optimize(
           termination_reason,
           current_iteration_stats,
         )
+        json_output_file = chop(output_file, head = 10, tail = 0)
+        json_output_file_complete = "./results/datapoints/$(json_output_file).json"
+        println("new output file: ", json_output_file_complete)
+
+        plot_dict = Dict()
+        plot_dict["iterations"] = iterate_plot_info
+        plot_dict["duality_gap"] = duality_gap_plot_info
+
+        # Trying to write to the files: 
+        open(json_output_file_complete, "w") do f
+          JSON3.write(f, plot_dict) 
+        end
+
         return unscaled_saddle_point_output(
           scaled_problem,
           avg_primal_solution,
@@ -1549,6 +1593,15 @@ function optimize(
           iteration - 1,
           iteration_stats,
         )
+      end
+
+      #### The restart section, at first, we use a completely separate restart scheme for DWIFOB ###
+      if params.dwifob_restart == "constant"
+        println("Restarting dwifob at iteration: ", iteration)
+        dwifob_solver_state, dwifob_matrix_cache = initialize_dwifob_state(dwifob_params, primal_size, dual_size)
+        did_dwifob_restart = true
+        # TODO: Add option to use a different restart criteria, (the one above restarts every 40 iterations)
+        # or make the dwifob restart completely independent, possibly increasing the cost.
       end
 
       current_iteration_stats.restart_used = run_restart_scheme(
@@ -1601,7 +1654,8 @@ function optimize(
     
     if params.steering_vectors
       if params.fast_dwifob
-        take_dwifob_step_efficient(params.step_size_policy_params, problem, solver_state, dwifob_solver_state, dwifob_matrix_cache)
+        take_dwifob_step_efficient(params.step_size_policy_params, problem, solver_state, dwifob_solver_state, dwifob_matrix_cache, did_dwifob_restart)
+        did_dwifob_restart = false
       else
         take_dwifob_step(params.step_size_policy_params, problem, solver_state, dwifob_solver_state) 
       end      

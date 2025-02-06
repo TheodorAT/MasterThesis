@@ -1,6 +1,6 @@
 # Script for testing the DWIFOB solver: 
 
-use_fast=true
+use_fast=false
 use_steering="true"
 # This is the error tolerance to be used in the solver:
 tolerance="1e-4"
@@ -16,10 +16,10 @@ INSTANCE="nug08-3rd"
 instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 experiment_name="${INSTANCE}_test_fast_${solver}_${tolerance}"
 
-output_dir="./results/${INSTANCE}"
-output_file_base="${output_dir}/${solver}_solve_trivial_${tolerance}"
+#### Below this point there are no more settings: #####
+output_file_base="./results/${experiment_name}"
 
-declare -a max_memory_list=(1 2 3 4 5 10 15 20 30) 
+declare -a max_memory_list=(1 3 5 10 20 30) 
 
 # Bulding a string for the max memory input to the julia program: 
 max_memory_input="["
@@ -53,7 +53,7 @@ if [ "$solver" == "dwifob" ]; then # This is the baseline vanilla dwifob:
 elif [ "$solver" == "+restarts" ]; then
    julia --project=scripts scripts/test_solver.jl \
         --instance_path $instance_path \
-        --output_dir $output_dir \
+        --output_dir $output_file_base \
         --method "pdhg" \
         --relative_optimality_tol ${tolerance} \
         --absolute_optimality_tol ${tolerance} \
@@ -71,7 +71,7 @@ elif [ "$solver" == "+restarts" ]; then
 elif [ "$solver" == "+scaling" ]; then
    julia --project=scripts scripts/test_solver.jl \
         --instance_path $instance_path \
-        --output_dir $output_dir \
+        --output_dir $output_file_base \
         --method "pdhg" \
         --relative_optimality_tol ${tolerance} \
         --absolute_optimality_tol ${tolerance} \
@@ -86,7 +86,7 @@ elif [ "$solver" == "+scaling" ]; then
 elif [ "$solver" == "+primal_weight" ]; then
    julia --project=scripts scripts/test_solver.jl \
         --instance_path $instance_path \
-        --output_dir $output_dir \
+        --output_dir $output_file_base \
         --method "pdhg" \
         --relative_optimality_tol ${tolerance} \
         --absolute_optimality_tol ${tolerance} \
@@ -99,7 +99,7 @@ elif [ "$solver" == "+primal_weight" ]; then
 elif [ "$solver" == "+step_size" ]; then
    julia --project=scripts scripts/test_solver.jl \
         --instance_path $instance_path \
-        --output_dir $output_dir \
+        --output_dir $output_file_base \
         --method "pdhg" \
         --relative_optimality_tol ${tolerance} \
         --absolute_optimality_tol ${tolerance} \
@@ -112,7 +112,6 @@ fi
 echo "Problems solved, storing data in csv format..."
 # Creating the JSON for collecting the results using another Julia Script:
 json_content='{"datasets": ['
-
 for max_memory in "${max_memory_list[@]}" 
 do
   log_dir_name_suffix="_m=${max_memory}"

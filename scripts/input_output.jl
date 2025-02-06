@@ -109,7 +109,7 @@ function solve_instance_and_output(
     end
     running_time = @elapsed begin
       output::FirstOrderLp.SaddlePointOutput =
-        FirstOrderLp.optimize(parameters, lp, dwifob_parameters)
+        FirstOrderLp.optimize(parameters, lp, dwifob_parameters, output_dir)
     end
     println("Elapsed time: $running_time sec")
 
@@ -491,6 +491,12 @@ function parse_command_line()
       "Whether or not to use the faster version of the DWIFOB algorithm to solve the LP."
     arg_type = Bool
     default = false
+
+    "--dwifob_restart"
+    help = 
+      "What kind of restart we use in DWIFOB."
+    arg_type = String
+    default = "no_restart"
 
   end
 
