@@ -705,6 +705,7 @@ function run_restart_scheme(
     avg_primal_solution, avg_dual_solution =
       compute_average(solution_weighted_avg)
   else
+    println("We get here and return no restart.")
     return RESTART_CHOICE_NO_RESTART
   end
 

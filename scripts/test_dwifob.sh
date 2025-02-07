@@ -1,25 +1,26 @@
 # Script for testing the DWIFOB solver: 
-
-use_fast=false
+use_fast="true"
 use_steering="true"
 # This is the error tolerance to be used in the solver:
 tolerance="1e-4"
 # The selected solver: (different versions of dwifob) available options: 
-# "dwifob", (In the future: "+restarts", "+scaling", "primal_weight", "+step_size")
-solver="dwifob"
-
+# "dwifob", "+restarts", "+scaling" (In the future: "+primal_weight", "+step_size")
+solver="+primal_weight"
+restart_scheme="constant"
+restart_frequency=40
+dwifob_option="alt_A"
 # Select the instance: 
-# INSTANCE="trivial_lp_model"
-# instance_path=./test/${INSTANCE}.mps
-# experiment_name="trivial_test_fast_${solver}_${tolerance}"
 INSTANCE="nug08-3rd"
-instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
-experiment_name="${INSTANCE}_test_fast_${solver}_${tolerance}"
+# Select fitting name of experiment:
+# experiment_name="${INSTANCE}_test_altA2_${solver}_${tolerance}"
+experiment_name="${INSTANCE}_test_${solver}_restart=${restart_frequency}_${tolerance}"
 
 #### Below this point there are no more settings: #####
+instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 output_file_base="./results/${experiment_name}"
 
-declare -a max_memory_list=(1 3 5 10 20 30) 
+declare -a max_memory_list=(1 2 3 4 5 10 20 40) 
+# declare -a max_memory_list=(1 2 3 4 5 10 15 20 30 40 50 60) 
 
 # Bulding a string for the max memory input to the julia program: 
 max_memory_input="["
@@ -48,7 +49,8 @@ if [ "$solver" == "dwifob" ]; then # This is the baseline vanilla dwifob:
         --scale_invariant_initial_primal_weight false \
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
-        --fast_dwifob ${use_fast}
+        --fast_dwifob ${use_fast} \
+        --dwifob_option ${dwifob_option}
 
 elif [ "$solver" == "+restarts" ]; then
    julia --project=scripts scripts/test_solver.jl \
@@ -66,7 +68,9 @@ elif [ "$solver" == "+restarts" ]; then
         --scale_invariant_initial_primal_weight false \
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
-        --fast_dwifob ${use_fast}
+        --fast_dwifob ${use_fast} \
+        --dwifob_restart ${restart_scheme} \
+        --dwifob_restart_frequency ${restart_frequency}
 
 elif [ "$solver" == "+scaling" ]; then
    julia --project=scripts scripts/test_solver.jl \
@@ -81,7 +85,9 @@ elif [ "$solver" == "+scaling" ]; then
         --scale_invariant_initial_primal_weight false \
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
-        --fast_dwifob ${use_fast}
+        --fast_dwifob ${use_fast} \
+        --dwifob_restart ${restart_scheme} \
+        --dwifob_restart_frequency ${restart_frequency}
         
 elif [ "$solver" == "+primal_weight" ]; then
    julia --project=scripts scripts/test_solver.jl \
@@ -94,7 +100,8 @@ elif [ "$solver" == "+primal_weight" ]; then
         --step_size_policy constant \
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
-        --fast_dwifob ${use_fast}
+        --fast_dwifob ${use_fast} \
+        --dwifob_restart ${restart_scheme}
 
 elif [ "$solver" == "+step_size" ]; then
    julia --project=scripts scripts/test_solver.jl \
@@ -106,7 +113,8 @@ elif [ "$solver" == "+step_size" ]; then
         --iteration_limit 5000 \
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
-        --fast_dwifob ${use_fast}
+        --fast_dwifob ${use_fast} \
+        --dwifob_restart ${restart_scheme}
 fi
 
 echo "Problems solved, storing data in csv format..."
@@ -130,6 +138,10 @@ julia --project=benchmarking benchmarking/process_json_to_csv.jl ./results/layou
 
 # Removing the temporary files:
 rm ./results/layout.json
-rm -rf $output_dir
+for max_memory in "${max_memory_list[@]}" 
+do
+  log_dir_name_suffix="_m=${max_memory}"
+  rm -rf ${output_file_base}${log_dir_name_suffix}
+done
 
 echo "Done"

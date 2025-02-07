@@ -5,39 +5,45 @@ tolerance="1e-4"
 
 # The selected solver: (either pdhg or dwifob)
 solver="dwifob"
-
+use_steering="true"
 instance_path=./test/trivial_lp_model.mps
 experiment_name="trivial_test_${solver}_${tolerance}"
+output_file_base="./results/${experiment_name}"
 
-# INSTANCE="nug08-3rd"
-# instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
-# experiment_name="${INSTANCE}_test_power_step_${solver}_${tolerance}"
+declare -a max_memory_list=(3) 
 
-output_dir="./results/trivial_LP"
-output_file_base="${output_dir}/${solver}_solve_trivial_${tolerance}"
-
-
-if [ "$solver" == "pdhg" ]; then
-  use_steering="false"
-elif [ "$solver" == "dwifob" ]; then
-  use_steering="true"
-else
-  echo "Invalid solver used"
-  return
-fi
+# Bulding a string for the max memory input to the julia program: 
+max_memory_input="["
+for max_memory in "${max_memory_list[@]}" 
+do
+  max_memory_input="${max_memory_input}${max_memory}, "
+done
+max_memory_input="${max_memory_input::-2}]"
 
 echo "Solving lp with ${solver}..."
 
-julia --project=scripts scripts/test_solver.jl \
+  julia --project=scripts scripts/test_solver.jl \
         --instance_path $instance_path \
         --output_dir $output_file_base \
         --method "pdhg" \
         --relative_optimality_tol ${tolerance} \
         --absolute_optimality_tol ${tolerance} \
-        --restart_scheme "no_restart" \
+        --iteration_limit 5000 \
+        --step_size_policy "constant" \
         --l_inf_ruiz_iterations 0 \
         --pock_chambolle_rescaling false \
+        --l2_norm_rescaling false \
+        --restart_scheme "no_restart" \
+        --primal_weight_update_smoothing 0.0 \
         --scale_invariant_initial_primal_weight false \
-        --step_size_policy "constant" \
         --steering_vectors ${use_steering} \
-        --iteration_limit 5000
+        --max_memory "${max_memory_input}" \
+        --fast_dwifob true \
+        --dwifob_option "alt_A"
+
+# Removing the temporary files:
+for max_memory in "${max_memory_list[@]}" 
+do
+  log_dir_name_suffix="_m=${max_memory}"
+  rm -rf ${output_file_base}${log_dir_name_suffix}
+done

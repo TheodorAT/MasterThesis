@@ -10,7 +10,8 @@ instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 base_experiment_name="${INSTANCE}_test_pdhg_variants_${tolerance}"
 
 # The selected solver:
-declare -a solver_list=("pdhg" "+restarts" "+scaling" "+primal_weight" "+step_size") 
+# declare -a solver_list=("pdhg" "+restarts" "+scaling" "+primal_weight" "+step_size") 
+declare -a solver_list=("+primal_weight") 
 
 json_content='{"datasets": ['
 
@@ -96,8 +97,8 @@ json_content=${json_content::-1}'
 echo "$json_content" > ./results/layout.json
 
 echo "Problems solved, storing data in csv format..."
-## Storing the results in CSV file using the process_json_to_csv.jl script:
-julia --project=benchmarking benchmarking/process_json_to_csv.jl ./results/layout.json ./results/${experiment_name}.csv
+# ## Storing the results in CSV file using the process_json_to_csv.jl script:
+# julia --project=benchmarking benchmarking/process_json_to_csv.jl ./results/layout.json ./results/${experiment_name}.csv
 
 # Removing the temporary files:
 for solver in "${solver_list[@]}"

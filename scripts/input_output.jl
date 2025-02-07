@@ -492,11 +492,24 @@ function parse_command_line()
     arg_type = Bool
     default = false
 
+    "--dwifob_option"
+    help = 
+      "Which version to use of the DWIFOB implementation, " *
+      "if this argument is nothing then the default implementations is selected. (ALG 4 in DWIFOB paper)"
+    arg_type = String
+    default = ""
+
     "--dwifob_restart"
     help = 
       "What kind of restart we use in DWIFOB."
     arg_type = String
     default = "no_restart"
+
+    "--dwifob_restart_frequency"
+    help = 
+      "How often we should restart for the constant restart scheme in DWIFOB."
+    arg_type = Int64
+    default = 40
 
   end
 
@@ -619,6 +632,9 @@ function process_args(parsed_args)
         step_size_policy_params,
         parsed_args["steering_vectors"], #FIXME: Clean this up, separate steering vector parameters into DwifobParameters struct instead.
         parsed_args["fast_dwifob"],
+        parsed_args["dwifob_option"],
+        parsed_args["dwifob_restart"],
+        parsed_args["dwifob_restart_frequency"],
       )
     end
     # Handling the max_memory input (parsing a string to array format): 
