@@ -200,6 +200,9 @@ struct PdhgParameters
     ConstantStepsizeParams,
   }
 
+  """ Whether or not the program should save the convergence stats in a json file or not"""
+  should_save_convergence_data::Bool
+
   """
     If true, applies steering vectors into the solver algorithm.
   """
@@ -302,6 +305,11 @@ mutable struct DwifobSolverState
 
   zeta_k::Float64
   epsilon::Float64
+
+  """
+    The maximum singular value of the K matrix, this is used to limit the step size.  
+  """
+  maximum_singular_value::Float64
 
   """
     The last m_n iterates of the primal, used in the RAA in DWIFOB.
@@ -907,6 +915,14 @@ function optimize(
     nothing,             # ratio_step_sizes
   )
 
+  desired_relative_error = 0.2 
+  maximum_singular_value, number_of_power_iterations =
+    estimate_maximum_singular_value(
+      problem.constraint_matrix,
+      probability_of_failure = 0.001,
+      desired_relative_error = desired_relative_error,
+    )
+
   if params.step_size_policy_params isa AdaptiveStepsizeParams
     solver_state.cumulative_kkt_passes += 0.5
     solver_state.step_size = 1.0 / norm(problem.constraint_matrix, Inf)
@@ -915,25 +931,19 @@ function optimize(
     solver_state.step_size = 1.0 / norm(problem.constraint_matrix, Inf)
     solver_state.ratio_step_sizes = 1.0
   else 
-    desired_relative_error = 0.2 # TODO: Can we increase performance by using values closer to 0? 0.01?
-    maximum_singular_value, number_of_power_iterations =
-      estimate_maximum_singular_value(
-        problem.constraint_matrix,
-        probability_of_failure = 0.001,
-        desired_relative_error = desired_relative_error,
-      )
-    solver_state.step_size =
-      (1 - desired_relative_error) / maximum_singular_value
+    # TODO: Can we increase performance by using values closer to 1? 0.99?
+    solver_state.step_size = (1 - desired_relative_error) / maximum_singular_value
     solver_state.cumulative_kkt_passes += number_of_power_iterations
+    
     # The opnorm is the correct one to use here, julia has a different implementation for the norm(). 
-    # OPNORM NOT IMPLEMENTED FOR SPARSE IN JULLIA, therefore we use maximum singular value instead! 
+    # OPNORM NOT IMPLEMENTED FOR SPARSE IN JULIA, therefore we use maximum singular value instead! 
     # println("Calculated ||K|| using norm: ", opnorm(problem.constraint_matrix, 2)) 
     println("The following should be true for M to be strictly positive: ")
     println(solver_state.step_size * solver_state.step_size * maximum_singular_value^2, " < ", 1)
   end
 
   if !(dwifob_params isa Nothing)
-    (dwifob_solver_state, dwifob_matrix_cache) = initialize_dwifob_state(dwifob_params, primal_size, dual_size)
+    (dwifob_solver_state, dwifob_matrix_cache) = initialize_dwifob_state(dwifob_params, primal_size, dual_size, maximum_singular_value)
   end  
         
   # Idealized number of KKT passes each time the termination criteria and
@@ -982,7 +992,7 @@ function optimize(
 
   # For plotting: 
   iterate_plot_info = Vector{Float64}()
-  duality_gap_plot_info = Vector{Float64}()
+  rel_duality_gap_plot_info = Vector{Float64}()
   did_dwifob_restart = false
   iteration = 0
   
@@ -1030,22 +1040,11 @@ function optimize(
         solver_state.primal_weight,
         POINT_TYPE_AVERAGE_ITERATE,
       )
-      # Storing values for plotting: FIXME: Do we need higher resolution for this, or is every 40 points enough? 
-      # Is this what we want?
-      twice = false
-      for convergence_information in current_iteration_stats.convergence_information
-        ci = convergence_information
-        gap = abs(ci.primal_objective - ci.dual_objective)
-        
-        push!(iterate_plot_info, iteration)
-        push!(duality_gap_plot_info, gap)
-        
-        if twice
-          println("At iteration: ", iteration, "we get here twice, this should not happen")
-        end
-        twice = true
-      end
-
+      # Storing values for plotting: FIXME: Do we need higher resolution for this?
+      # or is every 40 points (when we evaulate termination) enough?
+      push!(iterate_plot_info, iteration)
+      push!(rel_duality_gap_plot_info, current_iteration_stats.convergence_information[1].relative_optimality_gap)        
+ 
       method_specific_stats = current_iteration_stats.method_specific_stats
       method_specific_stats["time_spent_doing_basic_algorithm"] =
         time_spent_doing_basic_algorithm
@@ -1109,11 +1108,13 @@ function optimize(
 
         plot_dict = Dict()
         plot_dict["iterations"] = iterate_plot_info
-        plot_dict["duality_gap"] = duality_gap_plot_info
+        plot_dict["rel_duality_gap"] = rel_duality_gap_plot_info
 
-        # Trying to write to the files: 
-        open(json_output_file_complete, "w") do f
-          JSON3.write(f, plot_dict) 
+        if (params.should_save_convergence_data)
+          # Write convergence results to file: 
+          open(json_output_file_complete, "w") do f
+            JSON3.pretty(f, plot_dict) 
+          end
         end
 
         return unscaled_saddle_point_output(
@@ -1139,7 +1140,7 @@ function optimize(
         params.verbosity,
         params.restart_params,
       )
-      
+
       if current_iteration_stats.restart_used != RESTART_CHOICE_NO_RESTART
         solver_state.primal_weight = compute_new_primal_weight(
           last_restart_info,
@@ -1148,20 +1149,21 @@ function optimize(
           params.verbosity,
         )
         solver_state.ratio_step_sizes = 1.0
+        if (params.dwifob_restart == "PDLP")
+          dwifob_solver_state, dwifob_matrix_cache = initialize_dwifob_state(dwifob_params, primal_size, dual_size, dwifob_solver_state.maximum_singular_value)
+        end
       end
       if current_iteration_stats.restart_used == RESTART_CHOICE_RESTART_TO_AVERAGE
         solver_state.current_dual_product =
-          problem.constraint_matrix' * solver_state.current_dual_solution
+        problem.constraint_matrix' * solver_state.current_dual_solution
       end
     end
 
-    #### The restart section for dwifob, at first, we use a completely separate restart scheme for DWIFOB ###
+    #### The restart section for constant restarts of dwifob
     if (params.dwifob_restart == "constant" && iteration > 10 &&
       mod(iteration - 1, params.dwifob_restart_frequency) == 0 
     )
-      println("################# Restarted DWIFOB ###################### ")
-      dwifob_solver_state, dwifob_matrix_cache = initialize_dwifob_state(dwifob_params, primal_size, dual_size)
-      # TODO: Add option to use a different restart criteria, (the one above restarts every params.dwifob_restart_frequency iterations)
+      dwifob_solver_state, dwifob_matrix_cache = initialize_dwifob_state(dwifob_params, primal_size, dual_size, dwifob_solver_state.maximum_singular_value)
     end
   
     time_spent_doing_basic_algorithm_checkpoint = time()
@@ -1253,6 +1255,9 @@ function get_next_dwifob_candidate(
   return x_next, y_next, K_trans_y_next, p_x_k, p_y_k
 end
 
+"""
+  Prepares the solver states for the next iteration with DWIFOB. 
+"""
 function update_dwifob_state(
   x_next::Vector{Float64}, 
   y_next::Vector{Float64},
@@ -1487,7 +1492,6 @@ function take_dwifob_step(
   end
 
   m_k = min(dwifob_solver_state.max_memory, dwifob_solver_state.current_iteration)
-
   # Extracting some variables from the solver state struct
   # for clearer and more concise code:  
   x_hat_k = last(dwifob_solver_state.x_hat_iterates)
@@ -1626,6 +1630,92 @@ function take_dwifob_step(
     println("#######################################")
   end
 end
+
+
+"""
+Takes a step using the adaptive step size and steering vectors.
+It modifies the third and fourth arguments: solver_state and dwifob_solver_state.
+"""
+function take_dwifob_step_efficient(
+  step_params::AdaptiveStepsizeParams,
+  problem::QuadraticProgrammingProblem,
+  solver_state::PdhgSolverState,
+  dwifob_solver_state::DwifobSolverState,
+  debugging=false
+)
+  step_size = solver_state.step_size
+  done = false
+  iter = 0
+
+  desired_relative_error = 0.2 # TODO: Can we increase performance by using values closer to 0? 0.01?
+  maximum_singular_value, number_of_power_iterations = 
+    estimate_maximum_singular_value(
+      problem.constraint_matrix,
+      probability_of_failure = 0.001,
+      desired_relative_error = desired_relative_error,
+    )
+  while !done
+    iter += 1
+    solver_state.total_number_iterations += 1
+
+    # Try to take DWIFOB Step here, but do not manipulate the solver states yet, 
+    # we need the next primal, dual and dual product.: 
+    (next_primal, next_dual, next_dual_product, p_x_k, p_y_k
+      ) = get_next_dwifob_candidate(problem, solver_state, dwifob_solver_state)
+
+    interaction, movement = compute_interaction_and_movement(
+      solver_state,
+      problem,
+      next_primal,
+      next_dual,
+      next_dual_product,
+    )
+    # This one is incorrect but displays the lowest possible if using fast implementation. 
+    solver_state.cumulative_kkt_passes += 1
+
+    if movement == 0.0
+      # The algorithm will terminate at the beginning of the next iteration
+      solver_state.numerical_error = true
+      break
+    end
+    # The proof of Theorem 1 requires movement / step_size >= interaction.
+    if interaction > 0
+      step_size_limit = movement / interaction
+    else
+      step_size_limit = Inf
+    end
+
+    if step_size <= step_size_limit
+      update_dwifob_state(
+        next_primal,
+        next_dual,
+        next_dual_product,
+        p_x_k,
+        p_y_k,
+        problem, 
+        solver_state,
+        dwifob_solver_state,
+      )
+      done = true
+    # If the first step that we took was too long, we need to uninitialize the dwifob solver state.
+    elseif (dwifob_solver_state.current_iteration == 0) 
+      popfirst!(dwifob_solver_state.x_hat_iterates)
+      popfirst!(dwifob_solver_state.y_hat_iterates)
+    end
+
+    first_term = (step_size_limit * 
+      (1 - (solver_state.total_number_iterations + 1)^(-step_params.reduction_exponent)))
+    second_term = (step_size * 
+      (1 + (solver_state.total_number_iterations + 1)^(-step_params.growth_exponent)))
+    step_size = min(first_term, second_term, 1/(maximum_singular_value^2))
+  end
+  solver_state.step_size = step_size
+ 
+  # println("The following should be true for M to be strictly positive: ")
+  # println(step_size^2 * maximum_singular_value^2, " < ", 1)
+
+end
+
 
 """
 Takes a step with constant step size using steering vectors.
@@ -1802,11 +1892,21 @@ function take_dwifob_step_efficient(
   multiplicative_factor = lambda_k * (4 - 2 * lambda_k) * (4 - 2 * lambda_next) / (4 * lambda_next)
   l_squared_k = multiplicative_factor * squared_norm_M_fast(norm_argument_x, norm_argument_y, norm_argument_K_x, solver_state)
 
+  # HACK: If l_squared is very close to 0 but negative, we round it to 0. 
+  # For some reason we had to add this when restarting with frequency=80, this did not help...
+  # if (l_squared_k < 0 && l_squared_k > -0.01)
+  #   l_squared_k = 0
+  # end
+  sqrt_arg = squared_norm_M_fast(u_hat_x_next, u_hat_y_next, K_u_hat_x_next, solver_state)
+  
+  # if (sqrt_arg < 0 && sqrt_arg > -0.01)
+  #   sqrt_arg = 0
+  # end
+
   # Calculating the deviations for the next iteration:
-  u_next_hat = [u_hat_x_next; u_hat_y_next]
   scaling_factor = dwifob_solver_state.zeta_k * sqrt(l_squared_k) / (
     dwifob_solver_state.epsilon + 
-    sqrt(squared_norm_M_fast(u_hat_x_next, u_hat_y_next, K_u_hat_x_next, solver_state))
+    sqrt(sqrt_arg)
   )
 
   u_x_next = scaling_factor * u_hat_x_next
@@ -2237,6 +2337,7 @@ function initialize_dwifob_state(
   dwifob_params::DwifobParameters,
   primal_size::Int64,
   dual_size::Int64,
+  maximum_singular_value::Float64,
   )
   # Initializing DWIFOB solver struct:
   x_list = Vector{Vector{Float64}}()
@@ -2251,6 +2352,7 @@ function initialize_dwifob_state(
     1,                        # lambda_next
     0.99,                     # zeta_k
     1e-4,                     # epsilon
+    maximum_singular_value,   # maximum singular value of K.
     x_list,                   # primal_iterates
     y_list,                   # dual_iterates
     x_hat_list,               # primal_hat_iterates

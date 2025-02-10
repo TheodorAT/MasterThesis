@@ -1,18 +1,17 @@
 # Script for testing the PDHG solver: 
+tolerance="1e-4"                 # This is the error tolerance to be used in the solver.
+INSTANCE="nug08-3rd"             # Instance to solve.
+save_convergence_data="false"    # Whether or not to save convergence data to JSON.
+save_summary="false"             # Whether or not to save the summary to a .csv file 
 
-# This is the error tolerance to be used in the solver:
-tolerance="1e-4"
-# INSTANCE="trivial_lp_model"
-INSTANCE="nug08-3rd"
+instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
+base_experiment_name="${INSTANCE}_baseline_pdhg_variants_${tolerance}"
+
+### The selected solver:
+# declare -a solver_list=("pdhg" "+restarts" "+scaling" "+primal_weight" "+step_size") 
+declare -a solver_list=("+restarts") 
 
 ### Below this point are no settings ####
-instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
-base_experiment_name="${INSTANCE}_test_pdhg_variants_${tolerance}"
-
-# The selected solver:
-# declare -a solver_list=("pdhg" "+restarts" "+scaling" "+primal_weight" "+step_size") 
-declare -a solver_list=("+primal_weight") 
-
 json_content='{"datasets": ['
 
 for solver in "${solver_list[@]}"
@@ -36,7 +35,8 @@ do
          --l2_norm_rescaling false \
          --restart_scheme "no_restart" \
          --primal_weight_update_smoothing 0.0 \
-         --scale_invariant_initial_primal_weight false
+         --scale_invariant_initial_primal_weight false \
+         --save_convergence_data ${save_convergence_data}
 
    elif [ "$solver" == "+restarts" ]; then
       julia --project=scripts scripts/solve_qp.jl \
@@ -51,7 +51,8 @@ do
          --pock_chambolle_rescaling false \
          --l2_norm_rescaling false \
          --primal_weight_update_smoothing 0.0 \
-         --scale_invariant_initial_primal_weight false
+         --scale_invariant_initial_primal_weight false \
+         --save_convergence_data ${save_convergence_data}
 
    elif [ "$solver" == "+scaling" ]; then
       julia --project=scripts scripts/solve_qp.jl \
@@ -63,7 +64,8 @@ do
          --iteration_limit 5000 \
          --step_size_policy constant \
          --primal_weight_update_smoothing 0.0 \
-         --scale_invariant_initial_primal_weight false  
+         --scale_invariant_initial_primal_weight false \
+         --save_convergence_data ${save_convergence_data}  
          
    elif [ "$solver" == "+primal_weight" ]; then
       julia --project=scripts scripts/solve_qp.jl \
@@ -73,7 +75,8 @@ do
          --relative_optimality_tol ${tolerance} \
          --absolute_optimality_tol ${tolerance} \
          --iteration_limit 5000 \
-         --step_size_policy constant
+         --step_size_policy constant \
+         --save_convergence_data ${save_convergence_data}
 
    elif [ "$solver" == "+step_size" ]; then
       julia --project=scripts scripts/solve_qp.jl \
@@ -82,7 +85,8 @@ do
          --method "pdhg" \
          --relative_optimality_tol ${tolerance} \
          --absolute_optimality_tol ${tolerance} \
-         --iteration_limit 5000 
+         --iteration_limit 5000 \
+         --save_convergence_data ${save_convergence_data}
 
    fi
    
@@ -97,8 +101,13 @@ json_content=${json_content::-1}'
 echo "$json_content" > ./results/layout.json
 
 echo "Problems solved, storing data in csv format..."
-# ## Storing the results in CSV file using the process_json_to_csv.jl script:
-# julia --project=benchmarking benchmarking/process_json_to_csv.jl ./results/layout.json ./results/${experiment_name}.csv
+
+
+
+## Storing the results in CSV file using the process_json_to_csv.jl script:
+if [ "$save_summary" == "true" ]; then 
+   julia --project=benchmarking benchmarking/process_json_to_csv.jl ./results/layout.json ./results/${base_experiment_name}.csv
+fi 
 
 # Removing the temporary files:
 for solver in "${solver_list[@]}"

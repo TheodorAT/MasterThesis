@@ -1,32 +1,34 @@
 # Script for testing the DWIFOB solver: 
-use_fast="false"
-use_steering="true"
-# This is the error tolerance to be used in the solver:
-tolerance="1e-4"
+use_fast="true"               # If we want to use the faster version of dwifob. 
+tolerance="1e-4"              # The error tolerance to be used in the solver:
+save_convergence_data="false" # If we want to save convergence results to a .json file. 
+save_summary="false"          # If we want to save the summary to a .csv file
+
 # The selected solver: (different versions of dwifob) available options: 
 # "dwifob", "+restarts", "+scaling", "+primal_weight", ("+step_size")
-solver="+step_size"
-restart_scheme="constant"
+solver="+primal_weight"
+restart_scheme="constant"     # Chose between "constant", "PDLP", anything else means no restarts.
 restart_frequency=40
 dwifob_option="nothing"
 
 # Select the instance: 
 INSTANCE="nug08-3rd"
 instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
-
 # INSTANCE="trivial_lp"
 # instance_path=./test/trivial_lp_model.mps
 
 # Select fitting name of experiment:
 # experiment_name="${INSTANCE}_test_altA2_${solver}_${tolerance}"
-experiment_name="${INSTANCE}_test_slow_${solver}_restart=${restart_frequency}_${tolerance}"
+experiment_name="${INSTANCE}_dwifob_slow_${tolerance}"
+experiment_name="${INSTANCE}_dwifob_${solver}_restart=40_${tolerance}"
 
 output_file_base="./results/${experiment_name}"
 
-# declare -a max_memory_list=(4) 
-declare -a max_memory_list=(1 2 3 4 5 10 15 20 30 40 50 60) 
+declare -a max_memory_list=(1 2 3 4 5 6 7 10 15 20 30 40) 
+declare -a max_memory_list=(3) 
 
 #### Below this point there are no more settings: #####
+use_steering="true"           # If we want to use DWIFOB, this one should always be true.
 # Bulding a string for the max memory input to the julia program: 
 max_memory_input="["
 for max_memory in "${max_memory_list[@]}" 
@@ -52,6 +54,7 @@ if [ "$solver" == "dwifob" ]; then # This is the baseline vanilla dwifob:
         --restart_scheme "no_restart" \
         --primal_weight_update_smoothing 0.0 \
         --scale_invariant_initial_primal_weight false \
+        --save_convergence_data ${save_convergence_data} \
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
         --fast_dwifob ${use_fast} \
@@ -71,6 +74,7 @@ elif [ "$solver" == "+restarts" ]; then
         --l2_norm_rescaling false \
         --primal_weight_update_smoothing 0.0 \
         --scale_invariant_initial_primal_weight false \
+        --save_convergence_data ${save_convergence_data} \
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
         --fast_dwifob ${use_fast} \
@@ -88,6 +92,7 @@ elif [ "$solver" == "+scaling" ]; then
         --step_size_policy constant \
         --primal_weight_update_smoothing 0.0 \
         --scale_invariant_initial_primal_weight false \
+        --save_convergence_data ${save_convergence_data} \
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
         --fast_dwifob ${use_fast} \
@@ -103,6 +108,7 @@ elif [ "$solver" == "+primal_weight" ]; then
         --absolute_optimality_tol ${tolerance} \
         --iteration_limit 5000 \
         --step_size_policy constant \
+        --save_convergence_data ${save_convergence_data} \
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
         --fast_dwifob ${use_fast} \
@@ -116,6 +122,7 @@ elif [ "$solver" == "+step_size" ]; then
         --relative_optimality_tol ${tolerance} \
         --absolute_optimality_tol ${tolerance} \
         --iteration_limit 5000 \
+        --save_convergence_data ${save_convergence_data} \
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
         --fast_dwifob ${use_fast} \
@@ -139,7 +146,9 @@ json_content=${json_content::-1}'
 echo "$json_content" > ./results/layout.json
 
 ## Storing the results in CSV file using the process_json_to_csv.jl script:
-julia --project=benchmarking benchmarking/process_json_to_csv.jl ./results/layout.json ./results/${experiment_name}.csv
+if [ "$save_summary" == "true" ]; then 
+  julia --project=benchmarking benchmarking/process_json_to_csv.jl ./results/layout.json ./results/${experiment_name}.csv
+fi 
 
 # Removing the temporary files:
 rm ./results/layout.json

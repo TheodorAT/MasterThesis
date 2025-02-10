@@ -472,6 +472,13 @@ function parse_command_line()
     arg_type = Float64
     default = 1.0
 
+    "--save_convergence_data"
+    help =
+      "Whether or not to save the convergence data to an easy to read JSON file." *
+      "Used in convergence plots, when plotting relative duality gap against iterations."
+    arg_type = Bool
+    default = true
+
     "--steering_vectors"
     help = 
       "Whether or not to use the experimental feature of incorporating steering" * 
@@ -630,7 +637,8 @@ function process_args(parsed_args)
         termination_criteria,
         restart_params,
         step_size_policy_params,
-        parsed_args["steering_vectors"], #FIXME: Clean this up, separate steering vector parameters into DwifobParameters struct instead.
+        parsed_args["save_convergence_data"],
+        parsed_args["steering_vectors"], # FIXME: Clean this up, separate steering vector parameters into DwifobParameters struct instead.
         parsed_args["fast_dwifob"],
         parsed_args["dwifob_option"],
         parsed_args["dwifob_restart"],
