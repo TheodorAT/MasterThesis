@@ -1159,6 +1159,7 @@ function optimize(
     if (params.dwifob_restart == "constant" && iteration > 10 &&
       mod(iteration - 1, params.dwifob_restart_frequency) == 0 
     )
+      println("################# Restarted DWIFOB ###################### ")
       dwifob_solver_state, dwifob_matrix_cache = initialize_dwifob_state(dwifob_params, primal_size, dual_size)
       # TODO: Add option to use a different restart criteria, (the one above restarts every params.dwifob_restart_frequency iterations)
     end
@@ -1219,7 +1220,6 @@ function get_next_dwifob_candidate(
   end
 
   m_k = min(dwifob_solver_state.max_memory, dwifob_solver_state.current_iteration)
-
   # Extracting some variables from the solver state struct
   # for clearer and more concise code:  
   x_hat_k = last(dwifob_solver_state.x_hat_iterates)
@@ -1265,7 +1265,6 @@ function update_dwifob_state(
   debugging=false
 )
     m_k = min(dwifob_solver_state.max_memory, dwifob_solver_state.current_iteration)
-
     # Extracting some variables from the solver state struct
     # for clearer and more concise code:  
     x_k = solver_state.current_primal_solution
@@ -1301,6 +1300,7 @@ function update_dwifob_state(
     #   (see the other FIXME below.)
     R_k_primal = dwifob_solver_state.primal_iterates - dwifob_solver_state.x_hat_iterates
     R_k_dual = dwifob_solver_state.dual_iterates - dwifob_solver_state.y_hat_iterates
+    
     # Converting to matrixes for easier calculations: 
     R_k_primal = reduce(hcat, R_k_primal)
     R_k_dual = reduce(hcat, R_k_dual)
@@ -1326,9 +1326,11 @@ function update_dwifob_state(
   
     # Calculating the deviations for the next iteration:
     u_next_hat = [u_hat_x_next; u_hat_y_next]
-    scaling_factor = dwifob_solver_state.zeta_k * sqrt(abs(l_squared_k)) # FIXME: This does not seem good, we will have to address this at some point...
+    scaling_factor = dwifob_solver_state.zeta_k * sqrt(l_squared_k) # FIXME: This does not seem good, we will have to address this at some point...
     scaling_factor = scaling_factor / (dwifob_solver_state.epsilon + sqrt(squared_norm_M(u_next_hat, problem, solver_state)))
   
+    # scaling_factor = min(1, scaling_factor)
+    # println("Scaling factor: ", scaling_factor)
     u_x_next = scaling_factor * u_hat_x_next
     u_y_next = scaling_factor * u_hat_y_next
   
@@ -1341,7 +1343,6 @@ function update_dwifob_state(
     # solver_state.cumulative_kkt_passes += 3
   
     # Updating the changes in the mutable dwifob struct before the next iteration:
-    println("Dwifob iteration: ", dwifob_solver_state.current_iteration)
     dwifob_solver_state.current_iteration = dwifob_solver_state.current_iteration + 1
     dwifob_solver_state.current_primal_deviation = u_x_next
     dwifob_solver_state.current_dual_deviation = u_y_next
@@ -1399,6 +1400,13 @@ function take_dwifob_step(
   done = false
   iter = 0
 
+  desired_relative_error = 0.2 # TODO: Can we increase performance by using values closer to 0? 0.01?
+  maximum_singular_value, number_of_power_iterations = 
+    estimate_maximum_singular_value(
+      problem.constraint_matrix,
+      probability_of_failure = 0.001,
+      desired_relative_error = desired_relative_error,
+    )
   while !done
     iter += 1
     solver_state.total_number_iterations += 1
@@ -1442,15 +1450,23 @@ function take_dwifob_step(
         dwifob_solver_state,
       )
       done = true
+    # If the first step that we took was too long, we need to uninitialize the dwifob solver state.
+    elseif (dwifob_solver_state.current_iteration == 0) 
+      popfirst!(dwifob_solver_state.x_hat_iterates)
+      popfirst!(dwifob_solver_state.y_hat_iterates)
     end
 
     first_term = (step_size_limit * 
       (1 - (solver_state.total_number_iterations + 1)^(-step_params.reduction_exponent)))
     second_term = (step_size * 
       (1 + (solver_state.total_number_iterations + 1)^(-step_params.growth_exponent)))
-    step_size = min(first_term, second_term)
+    step_size = min(first_term, second_term, 1/(maximum_singular_value^2))
   end
   solver_state.step_size = step_size
+ 
+  # println("The following should be true for M to be strictly positive: ")
+  # println(step_size^2 * maximum_singular_value^2, " < ", 1)
+
 end
 
 """
@@ -2178,6 +2194,7 @@ function calculate_anderson_acceleration(
   else      
     # TODO: Solve this using prox-iterations
     # TODO: Solve this using "\" solve in julia instead (I think optimizing compilation already does this)
+    # println("Size of R_k: ", size(R_k))
     R_RT_inverse = inv(R_k' * R_k + 1e-4 * 1.0I) # FIXME: Temporary solution to handle singular matrixes
     ones_corr_dim = ones(size(R_RT_inverse)[1], 1) 
     alpha = (R_RT_inverse * ones_corr_dim) / (ones_corr_dim' * R_RT_inverse * ones_corr_dim)

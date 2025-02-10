@@ -4,24 +4,29 @@ use_steering="true"
 # This is the error tolerance to be used in the solver:
 tolerance="1e-4"
 # The selected solver: (different versions of dwifob) available options: 
-# "dwifob", "+restarts", "+scaling", "+primal_weight", "+step_size"
+# "dwifob", "+restarts", "+scaling", "+primal_weight", ("+step_size")
 solver="+step_size"
 restart_scheme="constant"
 restart_frequency=40
 dwifob_option="nothing"
+
 # Select the instance: 
 INSTANCE="nug08-3rd"
+instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
+
+# INSTANCE="trivial_lp"
+# instance_path=./test/trivial_lp_model.mps
+
 # Select fitting name of experiment:
 # experiment_name="${INSTANCE}_test_altA2_${solver}_${tolerance}"
 experiment_name="${INSTANCE}_test_slow_${solver}_restart=${restart_frequency}_${tolerance}"
 
-#### Below this point there are no more settings: #####
-instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 output_file_base="./results/${experiment_name}"
 
-declare -a max_memory_list=(1 2 3) 
-# declare -a max_memory_list=(1 2 3 4 5 10 15 20 30 40 50 60) 
+# declare -a max_memory_list=(4) 
+declare -a max_memory_list=(1 2 3 4 5 10 15 20 30 40 50 60) 
 
+#### Below this point there are no more settings: #####
 # Bulding a string for the max memory input to the julia program: 
 max_memory_input="["
 for max_memory in "${max_memory_list[@]}" 
