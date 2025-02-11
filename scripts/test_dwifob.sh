@@ -1,12 +1,12 @@
 # Script for testing the DWIFOB solver: 
 use_fast="true"               # If we want to use the faster version of dwifob. 
-tolerance="1e-4"              # The error tolerance to be used in the solver:
-save_convergence_data="false" # If we want to save convergence results to a .json file. 
-save_summary="false"          # If we want to save the summary to a .csv file
+tolerance="1e-8"              # The error tolerance to be used in the solver:
+save_convergence_data="true" # If we want to save convergence results to a .json file. 
+save_summary="true"          # If we want to save the summary to a .csv file
 
 # The selected solver: (different versions of dwifob) available options: 
 # "dwifob", "+restarts", "+scaling", "+primal_weight", ("+step_size")
-solver="+primal_weight"
+solver="+step_size"
 restart_scheme="constant"     # Chose between "constant", "PDLP", anything else means no restarts.
 restart_frequency=40
 dwifob_option="nothing"
@@ -19,13 +19,14 @@ instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 
 # Select fitting name of experiment:
 # experiment_name="${INSTANCE}_test_altA2_${solver}_${tolerance}"
-experiment_name="${INSTANCE}_dwifob_slow_${tolerance}"
-experiment_name="${INSTANCE}_dwifob_${solver}_restart=40_${tolerance}"
+# experiment_name="${INSTANCE}_dwifob_slow_${tolerance}"
+experiment_name="${INSTANCE}_dwifob_${solver}_restart=PDLP_${tolerance}"
+experiment_name="${INSTANCE}_dwifob_${solver}_restart=${restart_frequency}_${tolerance}"
 
 output_file_base="./results/${experiment_name}"
 
+declare -a max_memory_list=(2 3 4) 
 declare -a max_memory_list=(1 2 3 4 5 6 7 10 15 20 30 40) 
-declare -a max_memory_list=(3) 
 
 #### Below this point there are no more settings: #####
 use_steering="true"           # If we want to use DWIFOB, this one should always be true.
@@ -129,7 +130,6 @@ elif [ "$solver" == "+step_size" ]; then
         --dwifob_restart ${restart_scheme}
 fi
 
-echo "Problems solved, storing data in csv format..."
 # Creating the JSON for collecting the results using another Julia Script:
 json_content='{"datasets": ['
 for max_memory in "${max_memory_list[@]}" 
@@ -147,6 +147,7 @@ echo "$json_content" > ./results/layout.json
 
 ## Storing the results in CSV file using the process_json_to_csv.jl script:
 if [ "$save_summary" == "true" ]; then 
+  echo "Problems solved, storing data in file: ./results/${experiment_name}.csv"
   julia --project=benchmarking benchmarking/process_json_to_csv.jl ./results/layout.json ./results/${experiment_name}.csv
 fi 
 

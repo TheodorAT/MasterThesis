@@ -2,9 +2,12 @@
 
 # This is the solver to be used: Acceptable values are:
 #   pdhg (which uses vanilla pdhg)
-#   pdhg-steering (which uses vanilla pdhg combined with steering vectors)
+#   dwifob (which uses vanilla pdhg combined with steering vectors)
+#   dwifob+primal (uses pdlp + PDLP optimizations up to primal weight update.)
+#   dwifob+step_size (uses pdlp + PDLP optimizations up to dynamic step size.)
 #   pdlp (which uses pdhg including optimizations made in the google research papers)
 #   scs (which uses scs, a free to use solver in Julia)
+# FIXME: Fin
 solver="$1" 
 
 # This is the error tolerance to be used in the solver
@@ -12,74 +15,81 @@ tolerance="$2"
 
 declare -a instances=("nug08-3rd") # When actually doing real measurements, add more instances here.
 
-if [ "$solver" == "pdhg" ]; then
-  for INSTANCE in "${instances[@]}" 
-  do
-    echo "Solving ${INSTANCE} with pdhg..."
+# Get a list of all instances and print them out...
+while IFS= read -r line; do
+  if [[ $line != \#* ]]; then 
+    echo "line: $line"
+  fi
+done < "./benchmarking/lp_benchmark_instance_list"
 
-    # Add the settings to make the solver remove the optimizations made in the google paper, leaving only the pure PDHG method.
-    julia --project=scripts scripts/solve_qp.jl \
-    --instance_path ${HOME}/lp_benchmark/${INSTANCE}.mps.gz --method "pdhg" \
-    --output_dir ./results/${solver}_solve_${tolerance} \
-    --relative_optimality_tol ${tolerance} --absolute_optimality_tol ${tolerance} \
-    --restart_scheme "no_restart" \
-    --l_inf_ruiz_iterations 0 \
-    --pock_chambolle_rescaling false \
-    --scale_invariant_initial_primal_weight false \
-    --step_size_policy "constant"
-  done
-elif [ "$solver" == "pdhg-steering" ]; then
-  for INSTANCE in "${instances[@]}" 
-  do
-    echo "Solving ${INSTANCE} with pdhg-steering..."
+# if [ "$solver" == "pdhg" ]; then
+#   for INSTANCE in "${instances[@]}" 
+#   do
+#     echo "Solving ${INSTANCE} with pdhg..."
 
-    # Add the settings to make the solver remove the optimizations made in the google paper, leaving only the pure PDHG method.
-    # Additionally, we add the argument for using steering vectors.
-    julia --project=scripts scripts/solve_qp.jl \
-    --instance_path ${HOME}/lp_benchmark/${INSTANCE}.mps.gz --method "pdhg" \
-    --output_dir ./results/${solver}_solve_${tolerance} \
-    --relative_optimality_tol ${tolerance} --absolute_optimality_tol ${tolerance} \
-    --restart_scheme "no_restart" \
-    --l_inf_ruiz_iterations 0 \
-    --pock_chambolle_rescaling false \
-    --scale_invariant_initial_primal_weight false \
-    --step_size_policy "constant" \
-    --steering_vectors true
-  done
-elif [ "$solver" == "pdlp" ]; then
-  for INSTANCE in "${instances[@]}" 
-  do
-    echo "Solving ${INSTANCE} with pdlp..."
+#     # Add the settings to make the solver remove the optimizations made in the google paper, leaving only the pure PDHG method.
+#     julia --project=scripts scripts/solve_qp.jl \
+#     --instance_path ${HOME}/lp_benchmark/${INSTANCE}.mps.gz --method "pdhg" \
+#     --output_dir ./results/${solver}_solve_${tolerance} \
+#     --relative_optimality_tol ${tolerance} --absolute_optimality_tol ${tolerance} \
+#     --restart_scheme "no_restart" \
+#     --l_inf_ruiz_iterations 0 \
+#     --pock_chambolle_rescaling false \
+#     --scale_invariant_initial_primal_weight false \
+#     --step_size_policy "constant"
+#   done
+# elif [ "$solver" == "dwifob" ]; then
+#   for INSTANCE in "${instances[@]}" 
+#   do
+#     echo "Solving ${INSTANCE} with dwifob..."
 
-    # Calling the solver with the default settings, which include the optimization techniques from the google research papers.
-    julia --project=scripts scripts/solve_qp.jl \
-    --instance_path ${HOME}/lp_benchmark/${INSTANCE}.mps.gz --method "pdhg" \
-    --output_dir ./results/${solver}_solve_${tolerance} \
-    --relative_optimality_tol ${tolerance} --absolute_optimality_tol ${tolerance}
-  done
-elif [ "$solver" == "scs" ]; then  
-  for INSTANCE in "${instances[@]}" 
-  do
-    echo "Solving ${INSTANCE} with scs..."
+#     # Add the settings to make the solver remove the optimizations made in the google paper, leaving only the pure PDHG method.
+#     # Additionally, we add the argument for using steering vectors.
+#     julia --project=scripts scripts/solve_qp.jl \
+#     --instance_path ${HOME}/lp_benchmark/${INSTANCE}.mps.gz --method "pdhg" \
+#     --output_dir ./results/${solver}_solve_${tolerance} \
+#     --relative_optimality_tol ${tolerance} --absolute_optimality_tol ${tolerance} \
+#     --restart_scheme "no_restart" \
+#     --l_inf_ruiz_iterations 0 \
+#     --pock_chambolle_rescaling false \
+#     --scale_invariant_initial_primal_weight false \
+#     --step_size_policy "constant" \
+#     --steering_vectors true
+#   done
+# elif [ "$solver" == "pdlp" ]; then
+#   for INSTANCE in "${instances[@]}" 
+#   do
+#     echo "Solving ${INSTANCE} with pdlp..."
 
-    julia --project=scripts scripts/solve_lp_external.jl \
-      --instance_path ${HOME}/lp_benchmark/${INSTANCE}.mps.gz --solver scs-indirect \
-      --output_dir ./results/${solver}_solve_${tolerance} --tolerance ${tolerance}
-  done
-else
-  echo "Invalid solver used"
-  return
-fi
+#     # Calling the solver with the default settings, which include the optimization techniques from the google research papers.
+#     julia --project=scripts scripts/solve_qp.jl \
+#     --instance_path ${HOME}/lp_benchmark/${INSTANCE}.mps.gz --method "pdhg" \
+#     --output_dir ./results/${solver}_solve_${tolerance} \
+#     --relative_optimality_tol ${tolerance} --absolute_optimality_tol ${tolerance}
+#   done
+# elif [ "$solver" == "scs" ]; then  
+#   for INSTANCE in "${instances[@]}" 
+#   do
+#     echo "Solving ${INSTANCE} with scs..."
 
-echo "All problems solved, storing data in csv format..."
+#     julia --project=scripts scripts/solve_lp_external.jl \
+#       --instance_path ${HOME}/lp_benchmark/${INSTANCE}.mps.gz --solver scs-indirect \
+#       --output_dir ./results/${solver}_solve_${tolerance} --tolerance ${tolerance}
+#   done
+# else
+#   echo "Invalid solver used"
+#   return
+# fi
 
-## Storing the results in CSV file using the process_json_to_csv.jl script:
-echo '{"datasets": [
-   {"config": {"solver": "'${solver}'", "tolerance": "'${tolerance}'"}, "logs_directory": "./results/'${solver}'_solve_'${tolerance}'"}
-], "config_labels": ["solver", "tolerance"]}' > ./results/layout.json
+# echo "All problems solved, storing data in csv format..."
 
-julia --project=benchmarking benchmarking/process_json_to_csv.jl ./results/layout.json ./results/lp_benchmark_${solver}_${tolerance}.csv
+# ## Storing the results in CSV file using the process_json_to_csv.jl script:
+# echo '{"datasets": [
+#    {"config": {"solver": "'${solver}'", "tolerance": "'${tolerance}'"}, "logs_directory": "./results/'${solver}'_solve_'${tolerance}'"}
+# ], "config_labels": ["solver", "tolerance"]}' > ./results/layout.json
 
-rm ./results/layout.json
+# julia --project=benchmarking benchmarking/process_json_to_csv.jl ./results/layout.json ./results/lp_benchmark_${solver}_${tolerance}.csv
 
-echo "If no errors above then script finished successfully"
+# rm ./results/layout.json
+
+# echo "If no errors above then script finished successfully"

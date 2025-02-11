@@ -17,60 +17,60 @@
 # dbic1, neos1, neos2, ns1644855, nug15, pds-40, stat96v4, and watson_2 had been
 # dropped, and set-cover had been added.
 #
-
-# 16_n14
-# buildingenergy
-# chrom1024-7
-# cont1
-# cont11
-# datt256
-# degme
-# ds-big
-# ex10
-# fhnw-bin0 # <-- This one did not work for presolve for some reason...
-# fome13
-# graph40-40 # <-- This one did not work for presolve for some reason...
-#i_n13
-#irish-e
-#karted
-#L1_sixm1000obs
-#L1_sixm250obs
-#Linf_520c
-#lo10
-#long15
-#neos
-#neos3
-#neos-3025225   # <-- This one did not work for presolve for some reason...
-#neos5052403
-#neos-5251015   # <-- This one did not work for presolve for some reason...
-# netlarge1     # <-- This one did not work for presolve for some reason...
-# netlarge2
-# netlarge3
-# netlarge6 # <-- This one did not work for presolve for some reason...
-#ns1687037
-#ns1688926
-#nug08-3rd
-#pds-100
-#psched3-3
-#qap15
-#rail02
-#rail4284
-#rmine15    # <-- This one did not work for presolve for some reason...
-#s100
-#s250r10
-#s82        # <-- This one did not work for presolve for some reason...
-#savsched1
-#scpm1       # <-- This one did not work for presolve for some reason...
-#self
-#set-cover
-#shs1023
-#square15
-#square41
-#stat96v1
-#stormG2_1000
-#stp3d
-#support10
-#tp-6
-#tpl-tub-ws16 # <-- This one did not work for presolve for some reason...
+16_n14
+buildingenergy
+chrom1024-7
+cont1
+cont11
+datt256
+degme
+ds-big
+ex10
+fome13
+i_n13
+irish-e
+karted
+L1_sixm1000obs
+L1_sixm250obs
+Linf_520c
+lo10
+long15
+neos
+neos3
+neos5052403
+netlarge2
+netlarge3
+ns1687037
+ns1688926
+nug08-3rd
+pds-100
+psched3-3
+qap15
+rail02
+rail4284
+s100
+s250r10
+savsched1
+self
+set-cover
+shs1023
+square15
+square41
+stat96v1
+stormG2_1000
+stp3d
+support10
+tp-6
 ts-palko
 wide15
+### The ones below are excluded since they did not work with the presolve.
+# fhnw-bin0 # <-- This one did not work for presolve for some reason...
+# graph40-40 # <-- This one did not work for presolve for some reason...
+# neos-3025225   # <-- This one did not work for presolve for some reason...
+# neos-5251015   # <-- This one did not work for presolve for some reason...
+# netlarge1     # <-- This one did not work for presolve for some reason...
+# netlarge6 # <-- This one did not work for presolve for some reason...
+# rmine15    # <-- This one did not work for presolve for some reason...
+# s82        # <-- This one did not work for presolve for some reason...
+# scpm1       # <-- This one did not work for presolve for some reason...
+# tpl-tub-ws16 # <-- This one did not work for presolve for some reason...
