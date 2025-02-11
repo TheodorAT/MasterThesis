@@ -17,20 +17,22 @@
 # dbic1, neos1, neos2, ns1644855, nug15, pds-40, stat96v4, and watson_2 had been
 # dropped, and set-cover had been added.
 #
-16_n14
-buildingenergy
-chrom1024-7
-cont1
-cont11
-datt256
-degme
-ds-big
-ex10
-fome13
-i_n13
-irish-e
-karted
-L1_sixm1000obs
+## The ones below are already done
+# buildingenergy
+# chrom1024-7
+# cont1
+# cont11
+# datt256
+# degme
+# ex10
+# fome13
+# karted
+# Below was too hard for pdlp with 10000 iterations.
+# - ds-big
+# Below was too hard for pdlp with 10000 iterations.
+# - irish-e
+# Below one took really long...
+# L1_sixm1000obs
 L1_sixm250obs
 Linf_520c
 lo10
@@ -63,6 +65,9 @@ support10
 tp-6
 ts-palko
 wide15
+### These are excluded since they did not work with pdlp.
+# 16_n14
+# i_n13
 ### The ones below are excluded since they did not work with the presolve.
 # fhnw-bin0 # <-- This one did not work for presolve for some reason...
 # graph40-40 # <-- This one did not work for presolve for some reason...

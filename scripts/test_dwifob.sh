@@ -113,7 +113,8 @@ elif [ "$solver" == "+primal_weight" ]; then
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
         --fast_dwifob ${use_fast} \
-        --dwifob_restart ${restart_scheme}
+        --dwifob_restart ${restart_scheme} \
+        --dwifob_restart_frequency ${restart_frequency}
 
 elif [ "$solver" == "+step_size" ]; then
    julia --project=scripts scripts/test_solver.jl \
@@ -127,7 +128,9 @@ elif [ "$solver" == "+step_size" ]; then
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
         --fast_dwifob ${use_fast} \
-        --dwifob_restart ${restart_scheme}
+        --dwifob_restart ${restart_scheme} \
+        --dwifob_restart_frequency ${restart_frequency}
+        
 fi
 
 # Creating the JSON for collecting the results using another Julia Script:
