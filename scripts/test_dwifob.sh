@@ -1,16 +1,16 @@
 # Script for testing the DWIFOB solver: 
-use_fast="true"               # If we want to use the faster version of dwifob. 
+use_fast="false"               # If we want to use the faster version of dwifob. 
 tolerance="1e-4"              # The error tolerance to be used in the solver:
 save_convergence_data="false" # If we want to save convergence results to a .json file. 
 save_summary="true"           # If we want to save the summary to a .csv file
-iteration_limit="10000"       # The iteration limit for each solver and problem.
+iteration_limit="5000"       # The iteration limit for each solver and problem.
 
 # The selected solver: (different versions of dwifob) available options: 
 # "dwifob", "+restarts", "+scaling", "+primal_weight", ("+step_size")
-solver="+step_size"
+solver="+primal_weight"
 restart_scheme="constant"     # Chose between "constant", "PDLP", anything else means no restarts.
 restart_frequency=40
-dwifob_option="nothing"
+dwifob_option="alt_C"
 
 # Select the instance: 
 # (default: nug08-3rd)
@@ -23,22 +23,22 @@ dwifob_option="nothing"
 # - karted
 # larger: buildingenergy, 
 
-INSTANCE="buildingenergy"
+INSTANCE="nug08-3rd"
 instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 # INSTANCE="trivial_lp"
 # instance_path=./test/trivial_lp_model.mps
 
 # Select fitting name of experiment:
-# experiment_name="${INSTANCE}_test_altA2_${solver}_${tolerance}"
 # experiment_name="${INSTANCE}_dwifob_slow_${tolerance}"
-experiment_name="${INSTANCE}_dwifob_${solver}_restart=PDLP_${tolerance}"
-experiment_name="${INSTANCE}_dwifob_${solver}_restart=${restart_frequency}_${tolerance}"
+# experiment_name="${INSTANCE}_dwifob_${solver}_restart=PDLP_${tolerance}"
+# experiment_name="${INSTANCE}_dwifob_${solver}_restart=${restart_frequency}_${tolerance}"
+experiment_name="${INSTANCE}_test_altC_${solver}_${tolerance}"
 
 output_file_base="./results/${experiment_name}"
 
-declare -a max_memory_list=(4) 
+declare -a max_memory_list=(4 10) 
 declare -a max_memory_list=(1 2 3 4 5 6 7 10 15 20 30 40) 
-declare -a max_memory_list=(30 40) 
+# declare -a max_memory_list=(30 40) # These are the ones that we have not yet done for buildingenergy.
 
 #### Below this point there are no more settings: #####
 use_steering="true"           # If we want to use DWIFOB, this one should always be true.
@@ -92,7 +92,8 @@ elif [ "$solver" == "+restarts" ]; then
         --max_memory "${max_memory_input}" \
         --fast_dwifob ${use_fast} \
         --dwifob_restart ${restart_scheme} \
-        --dwifob_restart_frequency ${restart_frequency}
+        --dwifob_restart_frequency ${restart_frequency} \
+        --dwifob_option ${dwifob_option}
 
 elif [ "$solver" == "+scaling" ]; then
    julia --project=scripts scripts/test_solver.jl \
@@ -110,7 +111,8 @@ elif [ "$solver" == "+scaling" ]; then
         --max_memory "${max_memory_input}" \
         --fast_dwifob ${use_fast} \
         --dwifob_restart ${restart_scheme} \
-        --dwifob_restart_frequency ${restart_frequency}
+        --dwifob_restart_frequency ${restart_frequency} \
+        --dwifob_option ${dwifob_option}
         
 elif [ "$solver" == "+primal_weight" ]; then
    julia --project=scripts scripts/test_solver.jl \
@@ -126,7 +128,8 @@ elif [ "$solver" == "+primal_weight" ]; then
         --max_memory "${max_memory_input}" \
         --fast_dwifob ${use_fast} \
         --dwifob_restart ${restart_scheme} \
-        --dwifob_restart_frequency ${restart_frequency}
+        --dwifob_restart_frequency ${restart_frequency} \
+        --dwifob_option ${dwifob_option}
 
 elif [ "$solver" == "+step_size" ]; then
    julia --project=scripts scripts/test_solver.jl \
@@ -141,7 +144,8 @@ elif [ "$solver" == "+step_size" ]; then
         --max_memory "${max_memory_input}" \
         --fast_dwifob ${use_fast} \
         --dwifob_restart ${restart_scheme} \
-        --dwifob_restart_frequency ${restart_frequency}
+        --dwifob_restart_frequency ${restart_frequency} \
+        --dwifob_option ${dwifob_option}
         
 fi
 
@@ -168,10 +172,10 @@ fi
 
 # Removing the temporary files:
 rm ./results/layout.json
-# for max_memory in "${max_memory_list[@]}" 
-# do
-#   log_dir_name_suffix="_m=${max_memory}"
-#   rm -rf ${output_file_base}${log_dir_name_suffix}
-# done
+for max_memory in "${max_memory_list[@]}" 
+do
+  log_dir_name_suffix="_m=${max_memory}"
+  rm -rf ${output_file_base}${log_dir_name_suffix}
+done
 
 echo "Done"

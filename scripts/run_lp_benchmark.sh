@@ -19,7 +19,7 @@ while IFS= read -r line; do
   fi
 done < "./benchmarking/lp_benchmark_instance_list"
 
-declare -a instances=("neos3") # When actually doing real measurements, add more instances here.
+# declare -a instances=("neos3") # When actually doing real measurements, add more instances here.
 
 output_dir="./results/${solver}_solve_${tolerance}"
 save_convergence_data="false"

@@ -941,6 +941,7 @@ function optimize(
     println("The following should be true for M to be strictly positive: ")
     println(solver_state.step_size * solver_state.step_size * maximum_singular_value^2, " < ", 1)
   end
+  println("DWIFOB OPTION: ", params.dwifob_option)
 
   if !(dwifob_params isa Nothing)
     (dwifob_solver_state, dwifob_matrix_cache) = initialize_dwifob_state(dwifob_params, primal_size, dual_size, maximum_singular_value)
@@ -1194,6 +1195,8 @@ function optimize(
           take_dwifob_step_alt_A(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
         elseif params.dwifob_option == "alt_B"
           take_dwifob_step_alt_B(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
+        elseif params.dwifob_option == "alt_C"
+          take_dwifob_step_alt_C(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
         else
           take_dwifob_step(params.step_size_policy_params, problem, solver_state, dwifob_solver_state) 
         end
@@ -1311,7 +1314,7 @@ function update_dwifob_state(
   R_k_dual = reduce(hcat, R_k_dual)
   # Finally, forming R_k and calculating the RAA:
   R_k = vcat(R_k_primal, R_k_dual)
-  alpha_k = calculate_anderson_acceleration(R_k, m_k)
+  alpha_k = calculate_anderson_acceleration(solver_state, R_k, m_k)
 
   # Calculating the hat_deviations: 
   u_hat_x_deviation_sum = zeros(size(x_k))
@@ -1509,7 +1512,7 @@ function take_dwifob_step(
   R_k_dual = reduce(hcat, R_k_dual)
   # Finally, forming R_k and calculating the RAA:
   R_k = vcat(R_k_primal, R_k_dual)
-  alpha_k = calculate_anderson_acceleration(R_k, m_k)
+  alpha_k = calculate_anderson_acceleration(solver_state, R_k, m_k)
 
   # Calculating the hat_deviations: 
   u_hat_x_deviation_sum = zeros(size(x_k))
@@ -1745,7 +1748,7 @@ function take_dwifob_step_efficient(
       R_k_dual = reduce(hcat, R_k_dual)
       # Finally, forming R_k and calculating the RAA:
       R_k = vcat(R_k_primal, R_k_dual)
-      alpha_k = calculate_anderson_acceleration(R_k, m_k)
+      alpha_k = calculate_anderson_acceleration(solver_state, R_k, m_k)
     
       # Calculating the hat_deviations: 
       u_hat_x_deviation_sum = zeros(size(x_k))
@@ -1972,7 +1975,7 @@ function take_dwifob_step_efficient(
   R_k_dual = reduce(hcat, R_k_dual)
   # Finally, forming R_k and calculating the RAA:
   R_k = vcat(R_k_primal, R_k_dual)
-  alpha_k = calculate_anderson_acceleration(R_k, m_k)
+  alpha_k = calculate_anderson_acceleration(solver_state, R_k, m_k)
 
   # Calculating the hat_deviations: 
   u_hat_x_deviation_sum = zeros(size(x_k))
@@ -2105,7 +2108,6 @@ function take_dwifob_step_alt_A(
   m_k = min(dwifob_solver_state.max_memory, dwifob_solver_state.current_iteration)
 
   if (dwifob_solver_state.current_iteration == 0)
-    println("We use dwifob_alt_A")
     push!(dwifob_solver_state.x_hat_iterates, solver_state.current_primal_solution)
     push!(dwifob_solver_state.y_hat_iterates, solver_state.current_dual_solution)
   end
@@ -2165,7 +2167,7 @@ function take_dwifob_step_alt_A(
   R_k_dual = reduce(hcat, R_k_dual)
   # Finally, forming R_k and calculating the RAA:
   R_k = vcat(R_k_primal, R_k_dual)
-  alpha_k = calculate_anderson_acceleration(R_k, m_k)
+  alpha_k = calculate_anderson_acceleration(solver_state, R_k, m_k)
 
   # Calculating the hat_deviations: 
   u_hat_x_deviation_sum = zeros(size(x_k))
@@ -2247,7 +2249,7 @@ Takes a step with constant step size using steering vectors.
 Modifies the third and fourth arguments: solver_state and dwifob_solver_state.
 
 Different version of DWIFOB:
-  - This one where we take inspiration from the NOFOB paper. 
+  - This one where we take inspiration from the NOFOB article. 
 """
 function take_dwifob_step_alt_B(
   step_params::ConstantStepsizeParams,
@@ -2319,7 +2321,7 @@ function take_dwifob_step_alt_B(
   R_k_dual = reduce(hcat, R_k_dual)
   # Finally, forming R_k and calculating the RAA:
   R_k = vcat(R_k_primal, R_k_dual)
-  alpha_k = calculate_anderson_acceleration(R_k, m_k)
+  alpha_k = calculate_anderson_acceleration(solver_state, R_k, m_k)
 
   # Calculating the hat_deviations: 
   u_hat_x_deviation_sum = zeros(size(x_k))
@@ -2328,14 +2330,13 @@ function take_dwifob_step_alt_B(
     u_hat_x_deviation_sum += primal_i * alpha_i
     u_hat_y_deviation_sum += dual_i * alpha_i
   end 
-  u_hat_x_next = x_next - u_hat_x_deviation_sum
-  u_hat_y_next = y_next - u_hat_y_deviation_sum
+  u_hat_x_next = -x_next + u_hat_x_deviation_sum
+  u_hat_y_next = -y_next + u_hat_y_deviation_sum
 
   # Calculating the l^2_k factor: 
   multiplicative_factor = lambda_k * (4 - 2 * lambda_k) * (4 - 2 * lambda_next) / (4 * lambda_next)
   norm_argument = [p_x_k; p_y_k] - [x_k; y_k] + (2 * lambda_k - 2) / (4 - 2 * lambda_k) * [u_x_k; u_y_k]
   l_squared_k = multiplicative_factor * squared_norm_M(norm_argument, problem, solver_state)
-
 
   # Calculating the deviations for the next iteration:
   u_next_hat = [u_hat_x_next; u_hat_y_next]
@@ -2362,42 +2363,125 @@ function take_dwifob_step_alt_B(
   dwifob_solver_state.current_dual_deviation = u_y_next
   push!(dwifob_solver_state.x_hat_iterates, x_hat_next)
   push!(dwifob_solver_state.y_hat_iterates, y_hat_next)
+end
 
-  if debugging
-    println("#######################################")
-    println("### At iteration: ", dwifob_solver_state.current_iteration, " we get the following: ###")
-    println("x_hat_k: ", x_hat_k)
-    println("u_x_next: ", u_x_next)
-    println("primal gradient: ", primal_gradient)
-    println("u_y_next: ", u_y_next)
-    println("dual gradient: ", dual_gradient)
-    println("")
-    
-    println("Scaling factor: ", scaling_factor)
-    println("alpha: ", alpha_k)
-    println("u_hat_x_next: ", u_hat_x_next)
-    println("u_hat_y_next: ", u_hat_y_next)      
-    println("l_squared: ", l_squared_k)
-    println("")
+"""
+Takes a step with constant step size using steering vectors.
+Modifies the third and fourth arguments: solver_state and dwifob_solver_state.
 
-    println("x_iterates: ", dwifob_solver_state.primal_iterates)
+Different version of DWIFOB:
+  - This one where we combine the alt_A and alt_B versions. 
+"""
+function take_dwifob_step_alt_C(
+  step_params::ConstantStepsizeParams,
+  problem::QuadraticProgrammingProblem,
+  solver_state::PdhgSolverState,
+  dwifob_solver_state::DwifobSolverState,
+  debugging=false
+)
+  # Initializing the hat variables of the algorithm:
+  m_k = min(dwifob_solver_state.max_memory, dwifob_solver_state.current_iteration)
 
-    K = problem.constraint_matrix
-    print("K_x_iterates: [")
-    for iterate in dwifob_solver_state.primal_iterates
-      print(K * iterate, ", ")
-    end
-    print("]\n")
-    println("weighted_K_x_sum: ", K * u_hat_x_deviation_sum)
-    println("")
-
-    println("K_u_hat_x_next: ", K * u_hat_x_next)
-    println("K_u_x_next: ", K * u_x_next)
-    println("K_x_next: ", K * x_next)
-    println("K_x_hat_next: ", K * x_hat_next)
-
-    println("#######################################")
+  if (dwifob_solver_state.current_iteration == 0)
+    push!(dwifob_solver_state.x_hat_iterates, solver_state.current_primal_solution)
+    push!(dwifob_solver_state.y_hat_iterates, solver_state.current_dual_solution)
   end
+
+  # Extracting some variables from the solver state struct
+  # for clearer and more concise code:  
+  x_hat_k = last(dwifob_solver_state.x_hat_iterates)
+  y_hat_k = last(dwifob_solver_state.y_hat_iterates)
+
+  x_k = solver_state.current_primal_solution
+  y_k = solver_state.current_dual_solution
+
+  u_x_k = dwifob_solver_state.current_primal_deviation
+  u_y_k = dwifob_solver_state.current_dual_deviation
+
+  lambda_k = dwifob_solver_state.lambda_k
+  lambda_next = dwifob_solver_state.lambda_next
+
+  if isnan(x_hat_k[1]) 
+    println("Got NaN in iterates, aborting...")
+    exit(1)
+  end
+
+  # Calculating the primal "pseudogradient" (p_x_k) value:
+  primal_gradient = problem.objective_vector - problem.constraint_matrix' * y_hat_k
+  p_x_k = x_hat_k - (solver_state.step_size / solver_state.primal_weight) * primal_gradient
+  project_primal!(p_x_k, problem)
+
+  # Calculating the dual "pseudogradient" (p_y_k) value: 
+  dual_gradient = problem.right_hand_side - problem.constraint_matrix * (2 * p_x_k - x_hat_k)
+  p_y_k = y_hat_k + (solver_state.step_size * solver_state.primal_weight) * dual_gradient
+  project_dual!(p_y_k, problem)
+
+  # Calculating the next iterates:
+  x_next = x_k + lambda_k * (p_x_k - x_hat_k)
+  y_next = y_k + lambda_k * (p_y_k - y_hat_k)
+
+  # Update the solver states: 
+  solver_state.current_primal_solution = x_next
+  solver_state.current_dual_solution = y_next
+
+  # Preparing the input for the Regularized Andersson Acceleration:
+  push!(dwifob_solver_state.primal_iterates, p_x_k)
+  push!(dwifob_solver_state.dual_iterates, p_y_k)
+  if (m_k == dwifob_solver_state.max_memory) 
+    popfirst!(dwifob_solver_state.primal_iterates)
+    popfirst!(dwifob_solver_state.dual_iterates)
+    popfirst!(dwifob_solver_state.x_hat_iterates)
+    popfirst!(dwifob_solver_state.y_hat_iterates)
+  end
+
+  # Calculating R_k (linear combination of inertial terms) for the RAA:   
+  R_k_primal = dwifob_solver_state.primal_iterates - dwifob_solver_state.x_hat_iterates
+  R_k_dual = dwifob_solver_state.dual_iterates - dwifob_solver_state.y_hat_iterates
+  # Converting to matrixes for easier calculations: 
+  R_k_primal = reduce(hcat, R_k_primal)
+  R_k_dual = reduce(hcat, R_k_dual)
+  # Finally, forming R_k and calculating the RAA:
+  R_k = vcat(R_k_primal, R_k_dual)
+  alpha_k = calculate_anderson_acceleration(solver_state, R_k, m_k)
+
+  # Calculating the hat_deviations: 
+  u_hat_x_deviation_sum = zeros(size(x_k))
+  u_hat_y_deviation_sum = zeros(size(y_k))
+  for (primal_i, dual_i, alpha_i) in zip(dwifob_solver_state.primal_iterates, dwifob_solver_state.dual_iterates, alpha_k)
+    u_hat_x_deviation_sum += primal_i * alpha_i
+    u_hat_y_deviation_sum += dual_i * alpha_i
+  end 
+  u_hat_x_next = -p_x_k + u_hat_x_deviation_sum
+  u_hat_y_next = -p_y_k + u_hat_y_deviation_sum
+
+  # Calculating the l^2_k factor: 
+  multiplicative_factor = lambda_k * (4 - 2 * lambda_k) * (4 - 2 * lambda_next) / (4 * lambda_next)
+  norm_argument = [p_x_k; p_y_k] - [x_k; y_k] + (2 * lambda_k - 2) / (4 - 2 * lambda_k) * [u_x_k; u_y_k]
+  l_squared_k = multiplicative_factor * squared_norm_M(norm_argument, problem, solver_state)
+
+  # Calculating the deviations for the next iteration:
+  u_next_hat = [u_hat_x_next; u_hat_y_next]
+  scaling_factor = dwifob_solver_state.zeta_k * sqrt(l_squared_k) 
+  scaling_factor = scaling_factor / (dwifob_solver_state.epsilon + sqrt(squared_norm_M(u_next_hat, problem, solver_state)))
+  scaling_factor = min(1, scaling_factor)
+
+  u_x_next = scaling_factor * u_hat_x_next
+  u_y_next = scaling_factor * u_hat_y_next
+
+  # Calculating the hat iterates:
+  x_hat_next = x_next + u_x_next
+  y_hat_next = y_next + u_y_next
+
+  # Each iteration of this dwifob implementation calculates a matrix calculation 
+  # using the constraint matrix: K: 3 times, and K^T 3 times. (1 each for steps, 1 each for the 2 M-norms) 
+  solver_state.cumulative_kkt_passes += 3
+
+  # Updating the changes in the mutable dwifob struct before the next iteration:
+  dwifob_solver_state.current_iteration = dwifob_solver_state.current_iteration + 1
+  dwifob_solver_state.current_primal_deviation = u_x_next
+  dwifob_solver_state.current_dual_deviation = u_y_next
+  push!(dwifob_solver_state.x_hat_iterates, x_hat_next)
+  push!(dwifob_solver_state.y_hat_iterates, y_hat_next)  
 end
 
 # TODO: Solve this using efficient QR factorization, will not affect results but only speed.
@@ -2406,12 +2490,28 @@ end
   Uses implicit regularization to handle singular R_k^T R_k matrices.
 """
 function calculate_anderson_acceleration(
+  solver_state::PdhgSolverState,
   R_k::Matrix{Float64},
   m_k::Int64,
   )
   if m_k == 0
     return [1.0]
   else      
+    # Since KKT passes are used as a measure of how large calculations we do in the algorithm, 
+    # we need to modify this in the AA step as well. 
+    # One KKT pass is equal to one matrix multiplication of the M matrix, 
+    # or one with K^T and one with K. That would be the cost of 
+    # This is equivalent to multiplying with a (n = primal_size + dual_size)
+    # 1 KKT pass = p * d * d + p * d * p = (d+p) (p * d)
+    # Calculating the relative cost of the AA step: 
+    p = size(solver_state.current_primal_solution)[1]
+    d = size(solver_state.current_primal_solution)[1]
+    n = p + d
+    cost_approx = n*m_k + m_k^2 # (See Anderson Acceleration of Proximal Gradient Methods)
+    cost_relative_KKT = cost_approx / (n * p * d)
+    # We can look at some results and then decide if above reflects the complexity of the AA step. 
+    # (It shows the theoretical one with better implementation, which is extremely close to 0)
+    solver_state.cumulative_kkt_passes += cost_relative_KKT
     ones_corr_dim = ones(size(R_k)[2], 1) 
     x = (R_k' * R_k + 1e-8*1.0I)\ones_corr_dim  
     alpha = x / (ones_corr_dim' * x)
@@ -2424,6 +2524,7 @@ end
   Uses iterative refinement to calculate it to greater accuracy.
 """
 function calculate_anderson_acceleration_prox_iterations(
+  solver_state::PdhgSolverState,
   R_k::Matrix{Float64},
   m_k::Int64,
   iterations::Int64,
