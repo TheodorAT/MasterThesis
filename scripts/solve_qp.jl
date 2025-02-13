@@ -23,6 +23,10 @@ include("input_output.jl")
 function main()
   parsed_args = parse_command_line()
   parameters = process_args(parsed_args)
+  
+  dwifob_parameters = FirstOrderLp.DwifobParameters(
+    parsed_args["max_memory"][1], # We only use the first input, since this program only runs one case. 
+  )
 
   solve_instance_and_output(
     parameters,
@@ -31,6 +35,7 @@ function main()
     parsed_args["redirect_stdio"],
     parsed_args["transform_bounds_into_linear_constraints"],
     parsed_args["fixed_format_input"],
+    dwifob_parameters,
   )
 end
 

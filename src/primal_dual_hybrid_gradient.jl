@@ -2400,7 +2400,11 @@ function take_dwifob_step_alt_B(
   end
 end
 
-# TODO: Implement the regularized version of the Anderson Acceleration
+# TODO: Solve this using efficient QR factorization, will not affect results but only speed.
+"""
+  Function returning approximate solution to the Andersson acceleration step in the DWIFOB algorithm.
+  Uses implicit regularization to handle singular R_k^T R_k matrices.
+"""
 function calculate_anderson_acceleration(
   R_k::Matrix{Float64},
   m_k::Int64,
@@ -2408,12 +2412,31 @@ function calculate_anderson_acceleration(
   if m_k == 0
     return [1.0]
   else      
-    # TODO: Solve this using prox-iterations
-    # TODO: Solve this using "\" solve in julia instead (I think optimizing compilation already does this)
-    # println("Size of R_k: ", size(R_k))
-    R_RT_inverse = inv(R_k' * R_k + 1e-4 * 1.0I) # FIXME: Temporary solution to handle singular matrixes
-    ones_corr_dim = ones(size(R_RT_inverse)[1], 1) 
-    alpha = (R_RT_inverse * ones_corr_dim) / (ones_corr_dim' * R_RT_inverse * ones_corr_dim)
+    ones_corr_dim = ones(size(R_k)[2], 1) 
+    x = (R_k' * R_k + 1e-8*1.0I)\ones_corr_dim  
+    alpha = x / (ones_corr_dim' * x)
+    return alpha
+  end
+end
+
+"""
+  Function returning approximate solution to the Andersson acceleration step in the DWIFOB algorithm.
+  Uses iterative refinement to calculate it to greater accuracy.
+"""
+function calculate_anderson_acceleration_prox_iterations(
+  R_k::Matrix{Float64},
+  m_k::Int64,
+  iterations::Int64,
+  )
+  if m_k == 0
+    return [1.0]
+  else      
+    ones_corr_dim = ones(size(R_k)[2], 1) 
+    x_i = (R_k' * R_k + 1e-8*1.0I)\ones_corr_dim  
+    for i in 2:iterations
+      x_i = x_i + (R_k' * R_k + 1e-8*1.0I)\(ones_corr_dim - R_k' * R_k * x_i)
+    end
+    alpha = x_i / (ones_corr_dim' * x_i)
     return alpha
   end
 end

@@ -1,8 +1,9 @@
 # Script for testing the DWIFOB solver: 
 use_fast="true"               # If we want to use the faster version of dwifob. 
-tolerance="1e-8"              # The error tolerance to be used in the solver:
-save_convergence_data="true" # If we want to save convergence results to a .json file. 
-save_summary="true"          # If we want to save the summary to a .csv file
+tolerance="1e-4"              # The error tolerance to be used in the solver:
+save_convergence_data="false" # If we want to save convergence results to a .json file. 
+save_summary="true"           # If we want to save the summary to a .csv file
+iteration_limit="10000"       # The iteration limit for each solver and problem.
 
 # The selected solver: (different versions of dwifob) available options: 
 # "dwifob", "+restarts", "+scaling", "+primal_weight", ("+step_size")
@@ -12,7 +13,17 @@ restart_frequency=40
 dwifob_option="nothing"
 
 # Select the instance: 
-INSTANCE="nug08-3rd"
+# (default: nug08-3rd)
+# smallest: self, smaller m better m=(1, 2) best
+# smaller: chrom1024-7, <-- This one got numerical error for +step_size (since movement=0), no conclusive results on best m.
+# Some more reasonable sized ones: 
+# - ts-palko
+# - savsched1
+# - neos3
+# - karted
+# larger: buildingenergy, 
+
+INSTANCE="buildingenergy"
 instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 # INSTANCE="trivial_lp"
 # instance_path=./test/trivial_lp_model.mps
@@ -25,8 +36,9 @@ experiment_name="${INSTANCE}_dwifob_${solver}_restart=${restart_frequency}_${tol
 
 output_file_base="./results/${experiment_name}"
 
-declare -a max_memory_list=(2 3 4) 
+declare -a max_memory_list=(4) 
 declare -a max_memory_list=(1 2 3 4 5 6 7 10 15 20 30 40) 
+declare -a max_memory_list=(30 40) 
 
 #### Below this point there are no more settings: #####
 use_steering="true"           # If we want to use DWIFOB, this one should always be true.
@@ -47,7 +59,7 @@ if [ "$solver" == "dwifob" ]; then # This is the baseline vanilla dwifob:
         --method "pdhg" \
         --relative_optimality_tol ${tolerance} \
         --absolute_optimality_tol ${tolerance} \
-        --iteration_limit 5000 \
+        --iteration_limit $iteration_limit \
         --step_size_policy "constant" \
         --l_inf_ruiz_iterations 0 \
         --pock_chambolle_rescaling false \
@@ -68,7 +80,7 @@ elif [ "$solver" == "+restarts" ]; then
         --method "pdhg" \
         --relative_optimality_tol ${tolerance} \
         --absolute_optimality_tol ${tolerance} \
-        --iteration_limit 5000 \
+        --iteration_limit $iteration_limit \
         --step_size_policy constant \
         --l_inf_ruiz_iterations 0 \
         --pock_chambolle_rescaling false \
@@ -89,7 +101,7 @@ elif [ "$solver" == "+scaling" ]; then
         --method "pdhg" \
         --relative_optimality_tol ${tolerance} \
         --absolute_optimality_tol ${tolerance} \
-        --iteration_limit 5000 \
+        --iteration_limit $iteration_limit \
         --step_size_policy constant \
         --primal_weight_update_smoothing 0.0 \
         --scale_invariant_initial_primal_weight false \
@@ -107,7 +119,7 @@ elif [ "$solver" == "+primal_weight" ]; then
         --method "pdhg" \
         --relative_optimality_tol ${tolerance} \
         --absolute_optimality_tol ${tolerance} \
-        --iteration_limit 5000 \
+        --iteration_limit $iteration_limit \
         --step_size_policy constant \
         --save_convergence_data ${save_convergence_data} \
         --steering_vectors ${use_steering} \
@@ -123,7 +135,7 @@ elif [ "$solver" == "+step_size" ]; then
         --method "pdhg" \
         --relative_optimality_tol ${tolerance} \
         --absolute_optimality_tol ${tolerance} \
-        --iteration_limit 5000 \
+        --iteration_limit $iteration_limit \
         --save_convergence_data ${save_convergence_data} \
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
@@ -156,10 +168,10 @@ fi
 
 # Removing the temporary files:
 rm ./results/layout.json
-for max_memory in "${max_memory_list[@]}" 
-do
-  log_dir_name_suffix="_m=${max_memory}"
-  rm -rf ${output_file_base}${log_dir_name_suffix}
-done
+# for max_memory in "${max_memory_list[@]}" 
+# do
+#   log_dir_name_suffix="_m=${max_memory}"
+#   rm -rf ${output_file_base}${log_dir_name_suffix}
+# done
 
 echo "Done"

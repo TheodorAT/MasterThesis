@@ -18,30 +18,22 @@
 # dropped, and set-cover had been added.
 #
 ## The ones below are already done
-# buildingenergy
-# chrom1024-7
-# cont1
-# cont11
-# datt256
-# degme
-# ex10
-# fome13
-# karted
-# Below was too hard for pdlp with 10000 iterations.
-# - ds-big
-# Below was too hard for pdlp with 10000 iterations.
-# - irish-e
-# Below one took really long...
-# L1_sixm1000obs
+buildingenergy
+chrom1024-7
+cont1
+cont11
+datt256
+degme
+ex10
+fome13
+karted
+ds-big
+irish-e
 L1_sixm250obs
 Linf_520c
-lo10
-long15
 neos
 neos3
 neos5052403
-netlarge2
-netlarge3
 ns1687037
 ns1688926
 nug08-3rd
@@ -64,8 +56,14 @@ stp3d
 support10
 tp-6
 ts-palko
-wide15
+### Below took really, really long... we skip it for now. (my poor computer)
+# L1_sixm1000obs
 ### These are excluded since they did not work with pdlp.
+# wide15
+# lo10
+# netlarge2
+# netlarge3
+# long15
 # 16_n14
 # i_n13
 ### The ones below are excluded since they did not work with the presolve.

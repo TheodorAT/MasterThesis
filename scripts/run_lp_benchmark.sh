@@ -7,16 +7,19 @@
 #   dwifob+step_size (uses dwifob + PDLP optimizations up to dynamic step size.)
 #   pdlp (which uses pdhg including optimizations made in the google research papers)
 #   scs (which uses scs, a free to use solver in Julia)
-solver="pdlp" 
-tolerance="1e-4"        # This is the error tolerance to be used in the solver
-iteration_limit="10000"
+solver="dwifob" 
+tolerance="1e-4"        # This is the error tolerance to be used in the solver.
+iteration_limit="10000" # Iteration limit for the test run. 
+
 # Get a list of all instances:
-declare -a instances=() # When actually doing real measurements, add more instances here.
+declare -a instances=() 
 while IFS= read -r line; do
   if [[ $line != \#* ]]; then 
     instances+=("${line//[$'\t\r\n ']}") # Here we remove the newlines and blank characters from the variable
   fi
 done < "./benchmarking/lp_benchmark_instance_list"
+
+declare -a instances=("neos3") # When actually doing real measurements, add more instances here.
 
 output_dir="./results/${solver}_solve_${tolerance}"
 save_convergence_data="false"
