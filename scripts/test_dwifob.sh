@@ -7,8 +7,8 @@ iteration_limit="5000"        # The iteration limit for each solver and problem.
 
 # The selected solver: (different versions of dwifob) available options: 
 # "dwifob", "+restarts", "+scaling", "+primal_weight", "+step_size"
-solver="+step_size"
-restart_scheme="constant"     # Chose between "constant", "PDLP", anything else means no restarts.
+solver="+primal_weight"
+restart_scheme="NOFOB"     # Chose between "constant", "PDLP", "NOFOB", anything else means no restarts.
 restart_frequency=40
 dwifob_option="nothing"       # Chose between "alt_A", "alt_B", "alt_C", anything else means the original.
 
@@ -32,12 +32,13 @@ instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 # experiment_name="${INSTANCE}_dwifob_slow_${tolerance}"
 # experiment_name="${INSTANCE}_dwifob_${solver}_restart=PDLP_${tolerance}"
 # experiment_name="${INSTANCE}_dwifob_${solver}_restart=${restart_frequency}_${tolerance}"
-experiment_name="${INSTANCE}_test_globTauSigma_${solver}_${tolerance}"
+experiment_name="${INSTANCE}_test_NOFOB_RESTARTS_${solver}_${tolerance}"
 
 output_file_base="./results/${experiment_name}"
 
-declare -a max_memory_list=(1 2 3 4 5 6 7 10 15 20 30 40) 
 declare -a max_memory_list=(1) 
+declare -a max_memory_list=(1 2 3 5 10) 
+declare -a max_memory_list=(1 2 3 4 5 6 7 10 15 20 30 40) 
 # declare -a max_memory_list=(30 40) # These are the ones that we have not yet done for buildingenergy.
 
 #### Below this point there are no more settings: #####

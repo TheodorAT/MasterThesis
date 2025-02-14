@@ -338,6 +338,9 @@ mutable struct DwifobSolverState
   current_primal_deviation::Vector{Float64}
   current_dual_deviation::Vector{Float64}
 
+  current_u_hat_x_deviation_sum::Vector{Float64}
+  current_u_hat_y_deviation_sum::Vector{Float64}
+
 end
 
 # The following parameters are for the more efficient version of DWIFOB steps:
@@ -1169,12 +1172,17 @@ function optimize(
     end
 
     #### The restart section for constant restarts of dwifob
-    if (params.dwifob_restart == "constant" && iteration > 10 &&
-      mod(iteration - 1, params.dwifob_restart_frequency) == 0 
-    )
-      dwifob_solver_state, dwifob_matrix_cache = initialize_dwifob_state(dwifob_params, primal_size, dual_size, dwifob_solver_state.maximum_singular_value)
+    if (iteration > 10 && mod(iteration - 1, params.dwifob_restart_frequency) == 0 )
+      if (params.dwifob_restart == "constant")
+        dwifob_solver_state, dwifob_matrix_cache = initialize_dwifob_state(dwifob_params, primal_size, dual_size, dwifob_solver_state.maximum_singular_value)
+      elseif (params.dwifob_restart == "NOFOB")
+        new_x = dwifob_solver_state.current_u_hat_x_deviation_sum
+        new_y = dwifob_solver_state.current_u_hat_y_deviation_sum
+        dwifob_solver_state, dwifob_matrix_cache = initialize_dwifob_state(dwifob_params, primal_size, dual_size, dwifob_solver_state.maximum_singular_value)
+        solver_state.current_primal_solution = new_x
+        solver_state.current_dual_solution = new_y
+      end
     end
-  
     time_spent_doing_basic_algorithm_checkpoint = time()
 
     if params.verbosity >= 6 && print_to_screen_this_iteration(
@@ -1249,6 +1257,7 @@ function calculate_anderson_acceleration(
     
     x = (R_k' * R_k + 1e-4*1.0I)\ones_corr_dim  
     alpha = x / (ones_corr_dim' * x)
+    # println("m_k: ", m_k, " dim alpha: ", size(alpha))
     return alpha
   end
 end
@@ -1301,12 +1310,16 @@ function squared_norm_M_fast(
   K_x::Vector{Float64},
   solver_state::PdhgSolverState,
 )
-  # tau = solver_state.step_size / solver_state.primal_weight
-  # sigma = solver_state.step_size * solver_state.primal_weight
-  # return norm(x, 2)^2 + (tau/sigma) * norm(y, 2)^2 + 2 * tau * y' * K_x
-  global tau_global
-  global sigma_global
-  return norm(x, 2)^2 + (tau_global/sigma_global) * norm(y, 2)^2 + 2 * tau_global * y' * K_x
+  # ORIGINAL VERSION: 
+  tau = solver_state.step_size / solver_state.primal_weight
+  sigma = solver_state.step_size * solver_state.primal_weight
+  return norm(x, 2)^2 + (tau/sigma) * norm(y, 2)^2 + 2 * tau * y' * K_x
+  # GLOBTAUSIGMA VERSION 1: 
+  # global tau_global
+  # global sigma_global
+  # return norm(x, 2)^2 + (tau_global/sigma_global) * norm(y, 2)^2 + 2 * tau_global * y' * K_x
+  # 2-NORM VERSION: 
+  # return norm(x, 2)^2 + norm(y, 2)^2
 end 
 
 """Initializes the state for the structs required in dwifob."""
@@ -1336,6 +1349,8 @@ function initialize_dwifob_state(
     y_hat_list,               # dual_hat_iterates
     zeros(primal_size),       # current_primal_deviation
     zeros(dual_size),         # current_dual_deviation
+    zeros(primal_size),       # current u_hat_x_deviation_sum
+    zeros(dual_size),         # current u_hat_y_deviation_sum
   )
 
   # Initializing the matrix cache:
@@ -1355,7 +1370,6 @@ function initialize_dwifob_state(
 end
 
 ### DWIFOB Steps: ####
-
 """
 Takes a step with constant step size using steering vectors.
 Modifies the third and fourth arguments: solver_state and dwifob_solver_state.
@@ -1475,7 +1489,9 @@ function take_dwifob_step(
   dwifob_solver_state.current_dual_deviation = u_y_next
   push!(dwifob_solver_state.x_hat_iterates, x_hat_next)
   push!(dwifob_solver_state.y_hat_iterates, y_hat_next)
-
+  dwifob_solver_state.current_u_hat_x_deviation_sum = u_hat_x_deviation_sum
+  dwifob_solver_state.current_u_hat_y_deviation_sum = u_hat_y_deviation_sum
+  
   if debugging
     println("#######################################")
     println("### At iteration: ", dwifob_solver_state.current_iteration, " we get the following: ###")
@@ -1513,6 +1529,7 @@ function take_dwifob_step(
   end
 end
 
+# TODO: Make this have its own code instead of relying on the functions to manipulate the dwifob state.
 """
 Takes a step using the adaptive step size and steering vectors.
 It modifies the third and fourth arguments: solver_state and dwifob_solver_state.
@@ -1778,7 +1795,7 @@ function take_dwifob_step_efficient(
 
   u_x_next = scaling_factor * u_hat_x_next
   u_y_next = scaling_factor * u_hat_y_next
-
+  
   # Calculating the hat iterates:
   x_hat_next = x_next + u_x_next
   y_hat_next = y_next + u_y_next
@@ -1798,6 +1815,10 @@ function take_dwifob_step_efficient(
   # The hat vectors: 
   K_x_hat_next = K_x_next + K_u_x_next 
   K_trans_y_hat_next = K_trans_y_next + K_trans_u_y_next
+
+  # The past deviation sums, these are used in NOFOB type restarts. 
+  dwifob_solver_state.current_u_hat_x_deviation_sum = u_hat_x_deviation_sum
+  dwifob_solver_state.current_u_hat_y_deviation_sum = u_hat_y_deviation_sum
 
   # Storing the cached matrix products in the struct:
   dwifob_matrix_cache.K_u_x_current = K_u_x_next
@@ -2039,7 +2060,7 @@ function take_dwifob_step_efficient(
     
       u_x_next = scaling_factor * u_hat_x_next
       u_y_next = scaling_factor * u_hat_y_next
-    
+      
       # Calculating the hat iterates:
       x_hat_next = x_next + u_x_next
       y_hat_next = y_next + u_y_next
@@ -2060,6 +2081,10 @@ function take_dwifob_step_efficient(
       K_x_hat_next = K_x_next + K_u_x_next 
       K_trans_y_hat_next = K_trans_y_next + K_trans_u_y_next
     
+      # The past deviation sums, these are used in NOFOB type restarts. 
+      dwifob_solver_state.current_u_hat_x_deviation_sum = u_hat_x_deviation_sum
+      dwifob_solver_state.current_u_hat_y_deviation_sum = u_hat_y_deviation_sum
+      
       # Storing the cached matrix products in the struct:
       dwifob_matrix_cache.K_u_x_current = K_u_x_next
       dwifob_matrix_cache.K_x_hat_current = K_x_hat_next
