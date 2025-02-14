@@ -17,45 +17,46 @@
 # dbic1, neos1, neos2, ns1644855, nug15, pds-40, stat96v4, and watson_2 had been
 # dropped, and set-cover had been added.
 #
-## The ones below are already done
-buildingenergy
+## We only select the faster ones, for smaller testing and modeling: 
 chrom1024-7
-cont1
-cont11
-datt256
-degme
 ex10
-fome13
 karted
-ds-big
-irish-e
-L1_sixm250obs
-Linf_520c
-neos
 neos3
-neos5052403
-ns1687037
-ns1688926
+datt256
 nug08-3rd
-pds-100
-psched3-3
 qap15
-rail02
-rail4284
-s100
-s250r10
 savsched1
 self
-set-cover
-shs1023
-square15
-square41
-stat96v1
-stormG2_1000
-stp3d
-support10
-tp-6
 ts-palko
+# The ones below take longer, only include in final test runs:
+# buildingenergy
+# cont1
+# cont11
+# degme
+# fome13
+# ds-big
+# irish-e
+# L1_sixm250obs
+# Linf_520c
+# neos
+# neos5052403
+# ns1687037
+# ns1688926
+# pds-100
+# psched3-3
+# rail02
+# rail4284
+# s100
+# s250r10
+# set-cover
+# shs1023
+# square15
+# square41
+# stat96v1
+# stormG2_1000
+# stp3d
+# support10
+# tp-6
 ### Below took really, really long... we skip it for now. (my poor computer)
 # L1_sixm1000obs
 ### These are excluded since they did not work with pdlp.

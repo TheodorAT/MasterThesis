@@ -860,7 +860,6 @@ function take_step(
   )
 end
 
-
 """
 `optimize(params::PdhgParameters,
           original_problem::QuadraticProgrammingProblem)`
@@ -938,10 +937,7 @@ function optimize(
     # The opnorm is the correct one to use here, julia has a different implementation for the norm(). 
     # OPNORM NOT IMPLEMENTED FOR SPARSE IN JULIA, therefore we use maximum singular value instead! 
     # println("Calculated ||K|| using norm: ", opnorm(problem.constraint_matrix, 2)) 
-    println("The following should be true for M to be strictly positive: ")
-    println(solver_state.step_size * solver_state.step_size * maximum_singular_value^2, " < ", 1)
   end
-  println("DWIFOB OPTION: ", params.dwifob_option)
 
   if !(dwifob_params isa Nothing)
     (dwifob_solver_state, dwifob_matrix_cache) = initialize_dwifob_state(dwifob_params, primal_size, dual_size, maximum_singular_value)
@@ -969,6 +965,19 @@ function optimize(
     params.restart_params.primal_weight_update_smoothing
 
   iteration_stats = IterationStats[]
+  
+  # Debugging the algorithm
+  println("The following should be true for M to be strictly positive: ")
+  println(solver_state.step_size * solver_state.step_size * maximum_singular_value^2, " < ", 1)
+  println("DWIFOB OPTION: ", params.dwifob_option)
+
+  # Saving the initial step size and primal weight as global tau and sigma. # VERSION 1 HERE: 
+  global tau_global = solver_state.step_size / solver_state.primal_weight
+  global sigma_global = solver_state.step_size * solver_state.primal_weight
+  println("tau_global: ", tau_global, " sigma_global: ", sigma_global)
+
+  println("Initial primal weight: ", solver_state.primal_weight)
+
   start_time = time()
   # Basic algorithm refers to the primal and dual steps, and excludes restart
   # schemes and termination evaluation.
@@ -994,11 +1003,9 @@ function optimize(
   # For plotting: 
   iterate_plot_info = Vector{Float64}()
   rel_duality_gap_plot_info = Vector{Float64}()
-  did_dwifob_restart = false
   iteration = 0
   
-  println("Dwifob Restart scheme: ", params.dwifob_restart)
-  println("Dwifob Restart frequency: ", params.dwifob_restart_frequency)
+  println("Dwifob Restart scheme: ", params.dwifob_restart, ", restart frequency: ", params.dwifob_restart_frequency)
   while true
     iteration += 1
 
@@ -1239,7 +1246,8 @@ function calculate_anderson_acceleration(
     # (It shows the theoretical one with better implementation, which is extremely close to 0)
     solver_state.cumulative_kkt_passes += cost_relative_KKT
     ones_corr_dim = ones(size(R_k)[2], 1) 
-    x = (R_k' * R_k + 1e-8*1.0I)\ones_corr_dim  
+    
+    x = (R_k' * R_k + 1e-4*1.0I)\ones_corr_dim  
     alpha = x / (ones_corr_dim' * x)
     return alpha
   end
@@ -1296,6 +1304,8 @@ function squared_norm_M_fast(
   # tau = solver_state.step_size / solver_state.primal_weight
   # sigma = solver_state.step_size * solver_state.primal_weight
   # return norm(x, 2)^2 + (tau/sigma) * norm(y, 2)^2 + 2 * tau * y' * K_x
+  global tau_global
+  global sigma_global
   return norm(x, 2)^2 + (tau_global/sigma_global) * norm(y, 2)^2 + 2 * tau_global * y' * K_x
 end 
 
@@ -2065,8 +2075,8 @@ function take_dwifob_step_efficient(
       (1 - (solver_state.total_number_iterations + 1)^(-step_params.reduction_exponent)))
     second_term = (step_size * 
       (1 + (solver_state.total_number_iterations + 1)^(-step_params.growth_exponent)))
-    third_term = 1/(dwifob_solver_state.maximum_singular_value^2 + 1e-4)
-    step_size = min(first_term, second_term, third_term)
+    # third_term = 1/(dwifob_solver_state.maximum_singular_value^2 + 1e-4)
+    step_size = min(first_term, second_term) #, third_term)
   end
   solver_state.step_size = step_size
 end
