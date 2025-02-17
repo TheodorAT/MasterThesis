@@ -1314,7 +1314,7 @@ function squared_norm_M_fast(
   tau = solver_state.step_size / solver_state.primal_weight
   sigma = solver_state.step_size * solver_state.primal_weight
   return norm(x, 2)^2 + (tau/sigma) * norm(y, 2)^2 + 2 * tau * y' * K_x
-  # GLOBTAUSIGMA VERSION 1: 
+  # GLOBTAUSIGMA VERSION: 
   # global tau_global
   # global sigma_global
   # return norm(x, 2)^2 + (tau_global/sigma_global) * norm(y, 2)^2 + 2 * tau_global * y' * K_x
@@ -1433,7 +1433,7 @@ function take_dwifob_step(
   # Preparing the input for the Regularized Andersson Acceleration:
   push!(dwifob_solver_state.primal_iterates, x_next)
   push!(dwifob_solver_state.dual_iterates, y_next)
-  if (m_k == dwifob_solver_state.max_memory) 
+  if (m_k < dwifob_solver_state.current_iteration) 
     popfirst!(dwifob_solver_state.primal_iterates)
     popfirst!(dwifob_solver_state.dual_iterates)
     popfirst!(dwifob_solver_state.x_hat_iterates)
@@ -1720,7 +1720,7 @@ function take_dwifob_step_efficient(
   dwifob_matrix_cache.K_x_current = K_x_next
   dwifob_matrix_cache.K_trans_y_current = K_trans_y_next
 
-  if (m_k == dwifob_solver_state.max_memory) 
+  if (m_k < dwifob_solver_state.current_iteration) 
     popfirst!(dwifob_solver_state.primal_iterates)
     popfirst!(dwifob_solver_state.dual_iterates)
     popfirst!(dwifob_solver_state.x_hat_iterates)
@@ -1994,7 +1994,7 @@ function take_dwifob_step_efficient(
       dwifob_matrix_cache.K_x_current = K_x_next
       dwifob_matrix_cache.K_trans_y_current = K_trans_y_next
     
-      if (m_k == dwifob_solver_state.max_memory) 
+      if (m_k < dwifob_solver_state.current_iteration) 
         popfirst!(dwifob_solver_state.primal_iterates)
         popfirst!(dwifob_solver_state.dual_iterates)
         popfirst!(dwifob_solver_state.x_hat_iterates)
@@ -2190,7 +2190,7 @@ function update_dwifob_state(
   # Preparing the input for the Regularized Andersson Acceleration:
   push!(dwifob_solver_state.primal_iterates, x_next)
   push!(dwifob_solver_state.dual_iterates, y_next)
-  if (m_k == dwifob_solver_state.max_memory) 
+  if (m_k < dwifob_solver_state.current_iteration) 
     popfirst!(dwifob_solver_state.primal_iterates)
     popfirst!(dwifob_solver_state.dual_iterates)
     popfirst!(dwifob_solver_state.x_hat_iterates)
@@ -2317,7 +2317,7 @@ function take_dwifob_step_alt_A(
   # Preparing the input for the Regularized Andersson Acceleration:
   push!(dwifob_solver_state.primal_iterates, p_x_k)
   push!(dwifob_solver_state.dual_iterates, p_y_k)
-  if (m_k == dwifob_solver_state.max_memory) 
+  if (m_k < dwifob_solver_state.current_iteration) 
     popfirst!(dwifob_solver_state.primal_iterates)
     popfirst!(dwifob_solver_state.dual_iterates)
     popfirst!(dwifob_solver_state.x_hat_iterates)
@@ -2471,7 +2471,7 @@ function take_dwifob_step_alt_B(
   # Preparing the input for the Regularized Andersson Acceleration:
   push!(dwifob_solver_state.primal_iterates, x_next)
   push!(dwifob_solver_state.dual_iterates, y_next)
-  if (m_k == dwifob_solver_state.max_memory) 
+  if (m_k < dwifob_solver_state.current_iteration) 
     popfirst!(dwifob_solver_state.primal_iterates)
     popfirst!(dwifob_solver_state.dual_iterates)
     popfirst!(dwifob_solver_state.x_hat_iterates)
@@ -2592,7 +2592,7 @@ function take_dwifob_step_alt_C(
   # Preparing the input for the Regularized Andersson Acceleration:
   push!(dwifob_solver_state.primal_iterates, p_x_k)
   push!(dwifob_solver_state.dual_iterates, p_y_k)
-  if (m_k == dwifob_solver_state.max_memory) 
+  if (m_k < dwifob_solver_state.current_iteration) 
     popfirst!(dwifob_solver_state.primal_iterates)
     popfirst!(dwifob_solver_state.dual_iterates)
     popfirst!(dwifob_solver_state.x_hat_iterates)
