@@ -4,7 +4,7 @@ scripts/results
 benchmarking/LIBSVM_benchmark
 benchmarking/lp_benchmark
 benchmarking/temp_dir
-results
+results/*
 !results*.csv
 tmp
 SVM_l1_reg
