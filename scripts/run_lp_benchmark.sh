@@ -3,11 +3,12 @@
 # This is the solver to be used: Acceptable values are:
 #   pdhg (which uses vanilla pdhg)
 #   dwifob (which uses vanilla dwifob)
+#   pdhg+primal (which uses pdhg including optimizations up to primal weight update.)
 #   dwifob+primal (uses dwifob + PDLP optimizations up to primal weight update.)
-#   dwifob+step_size (uses dwifob + PDLP optimizations up to dynamic step size.)
 #   pdlp (which uses pdhg including optimizations made in the google research papers)
+#   dwifob+step_size (uses dwifob + PDLP optimizations up to dynamic step size.)
 #   scs (which uses scs, a free to use solver in Julia)
-solver="dwifob+step_size" 
+solver="dwifob"
 tolerance="1e-4"        # This is the error tolerance to be used in the solver.
 iteration_limit="10000" # Iteration limit for the test run. 
 
@@ -19,13 +20,15 @@ while IFS= read -r line; do
   fi
 done < "./benchmarking/lp_benchmark_instance_list"
 
-# declare -a instances=("nug08-3rd") # For testing the script
-experiment_name="fast_lp_benchmark_${solver}_${tolerance}"
-experiment_name="fast_lp_benchmark_${solver}_testGlobTauSigma2_m=1_${tolerance}"
-
-output_dir="./results/${solver}_solve_${tolerance}"
 save_convergence_data="false"
-max_memory_input="[1]"
+max_memory_input="[3]"
+
+# declare -a instances=("nug08-3rd") # For testing the script
+experiment_name="fast_lp_benchmark_${solver}_${tolerance}_m=${max_memory_input}"
+experiment_name="fast_lp_benchmark_${solver}_${tolerance}"
+
+# Below are no more settings:
+output_dir="./results/${experiment_name}"
 
 if [ "$solver" == "pdhg" ]; then
   for INSTANCE in "${instances[@]}" 
@@ -47,6 +50,40 @@ if [ "$solver" == "pdhg" ]; then
          --restart_scheme "no_restart" \
          --primal_weight_update_smoothing 0.0 \
          --scale_invariant_initial_primal_weight false \
+         --save_convergence_data ${save_convergence_data}
+
+  done
+elif [ "$solver" == "pdhg+primal" ]; then
+  for INSTANCE in "${instances[@]}" 
+  do
+    echo "Solving ${INSTANCE} with pdhg+primal..."
+    instance_path="${HOME}/lp_benchmark/${INSTANCE}.mps.gz"
+
+    julia --project=scripts scripts/solve_qp.jl \
+        --instance_path $instance_path \
+        --output_dir $output_dir \
+        --method "pdhg" \
+        --relative_optimality_tol ${tolerance} \
+        --absolute_optimality_tol ${tolerance} \
+        --iteration_limit $iteration_limit \
+        --step_size_policy "constant" \
+        --save_convergence_data ${save_convergence_data}
+
+  done
+elif [ "$solver" == "pdlp" ]; then
+  for INSTANCE in "${instances[@]}" 
+  do
+    echo "Solving ${INSTANCE} with pdlp..."
+    instance_path="${HOME}/lp_benchmark/${INSTANCE}.mps.gz"
+
+    # Calling the solver with the default settings, which include the optimization techniques from the google research papers.
+    julia --project=scripts scripts/solve_qp.jl \
+         --instance_path $instance_path \
+         --output_dir $output_dir \
+         --method "pdhg" \
+         --relative_optimality_tol ${tolerance} \
+         --absolute_optimality_tol ${tolerance} \
+         --iteration_limit $iteration_limit \
          --save_convergence_data ${save_convergence_data}
 
   done
@@ -84,8 +121,6 @@ elif [ "$solver" == "dwifob+primal" ]; then
     echo "Solving ${INSTANCE} with dwifob+primal..."
     instance_path="${HOME}/lp_benchmark/${INSTANCE}.mps.gz"
 
-    # Add the settings to make the solver remove the optimizations made in the google paper, leaving only the pure PDHG method.
-    # Additionally, we add the argument for using steering vectors.
     julia --project=scripts scripts/solve_qp.jl \
         --instance_path $instance_path \
         --output_dir $output_dir \
@@ -108,8 +143,6 @@ elif [ "$solver" == "dwifob+step_size" ]; then
     echo "Solving ${INSTANCE} with dwifob+step_size..."
     instance_path="${HOME}/lp_benchmark/${INSTANCE}.mps.gz"
 
-    # Add the settings to make the solver remove the optimizations made in the google paper, leaving only the pure PDHG method.
-    # Additionally, we add the argument for using steering vectors.
         julia --project=scripts scripts/solve_qp.jl \
         --instance_path $instance_path \
         --output_dir $output_dir \
@@ -125,23 +158,6 @@ elif [ "$solver" == "dwifob+step_size" ]; then
         --save_convergence_data ${save_convergence_data}
 
   done
-elif [ "$solver" == "pdlp" ]; then
-  for INSTANCE in "${instances[@]}" 
-  do
-    echo "Solving ${INSTANCE} with pdlp..."
-    instance_path="${HOME}/lp_benchmark/${INSTANCE}.mps.gz"
-
-    # Calling the solver with the default settings, which include the optimization techniques from the google research papers.
-    julia --project=scripts scripts/solve_qp.jl \
-         --instance_path $instance_path \
-         --output_dir $output_dir \
-         --method "pdhg" \
-         --relative_optimality_tol ${tolerance} \
-         --absolute_optimality_tol ${tolerance} \
-         --iteration_limit $iteration_limit \
-         --save_convergence_data ${save_convergence_data}
-
-  done
 elif [ "$solver" == "scs" ]; then  
   for INSTANCE in "${instances[@]}" 
   do
@@ -153,9 +169,6 @@ elif [ "$solver" == "scs" ]; then
       --output_dir $output_dir --tolerance ${tolerance}
 
   done
-else
-  echo "Invalid solver used"
-  return
 fi
 
 echo "All problems solved, storing data in csv format..."

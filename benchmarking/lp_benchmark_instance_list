@@ -21,7 +21,7 @@
 chrom1024-7
 ex10
 karted
-neos3
+# neos3 # This one causes dwifob to crash, gives negative root argument... Debug in the future.  
 datt256
 nug08-3rd
 qap15

@@ -203,6 +203,9 @@ struct PdhgParameters
   """ Whether or not the program should save the convergence stats in a json file or not"""
   should_save_convergence_data::Bool
 
+  """ Whether or not the program should save the detailed convergence stats in a json file or not"""
+  should_save_detailed_data::Bool
+
   """
     If true, applies steering vectors into the solver algorithm.
   """
@@ -927,7 +930,7 @@ function optimize(
 
   if params.step_size_policy_params isa AdaptiveStepsizeParams
     solver_state.cumulative_kkt_passes += 0.5
-    solver_state.step_size = 1.0 / norm(problem.constraint_matrix, Inf)
+    solver_state.step_size = 1.0 / norm(problem.constraint_matrix, Inf) # FIXME: Why do they do this norm for adaptive step sizes?
   elseif params.step_size_policy_params isa MalitskyPockStepsizeParameters
     solver_state.cumulative_kkt_passes += 0.5
     solver_state.step_size = 1.0 / norm(problem.constraint_matrix, Inf)
@@ -1006,6 +1009,11 @@ function optimize(
   # For plotting: 
   iterate_plot_info = Vector{Float64}()
   rel_duality_gap_plot_info = Vector{Float64}()
+  primal_iterates_plot_info = Vector{Vector{Float64}}()
+  dual_iterates_plot_info = Vector{Vector{Float64}}()
+  primal_averages_plot_info = Vector{Vector{Float64}}()
+  dual_averages_plot_info = Vector{Vector{Float64}}()
+
   iteration = 0
   
   println("Dwifob Restart scheme: ", params.dwifob_restart, ", restart frequency: ", params.dwifob_restart_frequency)
@@ -1051,11 +1059,21 @@ function optimize(
         solver_state.primal_weight,
         POINT_TYPE_AVERAGE_ITERATE,
       )
-      # Storing values for plotting: FIXME: Do we need higher resolution for this?
-      # or is every 40 points (when we evaulate termination) enough?
-      push!(iterate_plot_info, iteration)
-      push!(rel_duality_gap_plot_info, current_iteration_stats.convergence_information[1].relative_optimality_gap)        
- 
+      
+      if (params.should_save_convergence_data)       
+        # Storing values for plotting: FIXME: Do we need higher resolution for this?
+        # or is every 40 points (when we evaulate termination) enough?
+        push!(iterate_plot_info, iteration)
+        push!(rel_duality_gap_plot_info, current_iteration_stats.convergence_information[1].relative_optimality_gap)        
+        if (params.should_save_detailed_data)
+          push!(primal_iterates_plot_info, solver_state.current_primal_solution)
+          push!(dual_iterates_plot_info, solver_state.current_dual_solution)
+          push!(primal_averages_plot_info, avg_primal_solution)
+          push!(dual_averages_plot_info, avg_dual_solution)
+          # TODO: Add deviations to this plot info as well.
+        end
+      end 
+
       method_specific_stats = current_iteration_stats.method_specific_stats
       method_specific_stats["time_spent_doing_basic_algorithm"] =
         time_spent_doing_basic_algorithm
@@ -1113,18 +1131,33 @@ function optimize(
           termination_reason,
           current_iteration_stats,
         )
-        json_output_file = chop(output_file, head = 10, tail = 0)
-        json_output_file_complete = "./results/datapoints/$(json_output_file).json"
-        println("new output file: ", json_output_file_complete)
-
-        plot_dict = Dict()
-        plot_dict["iterations"] = iterate_plot_info
-        plot_dict["rel_duality_gap"] = rel_duality_gap_plot_info
-
+        
         if (params.should_save_convergence_data)
+          json_output_file = chop(output_file, head = 10, tail = 0)
+          json_output_file_complete = "./results/datapoints/$(json_output_file).json"
+          println("new output file: ", json_output_file_complete)
+          
+          plot_dict = Dict()
+          plot_dict["iterations"] = iterate_plot_info
+          plot_dict["rel_duality_gap"] = rel_duality_gap_plot_info
+
           # Write convergence results to file: 
           open(json_output_file_complete, "w") do f
             JSON3.pretty(f, plot_dict) 
+          end
+          if (params.should_save_detailed_data)
+            json_detailed_output_file_complete = "./results/datapoints/$(json_output_file)_detailed.json"
+
+            plot_dict_detailed = Dict()
+            plot_dict_detailed["primal_iterates"] = primal_iterates_plot_info
+            plot_dict_detailed["dual_iterates"] = dual_iterates_plot_info
+            plot_dict_detailed["primal_averages"] = primal_averages_plot_info
+            plot_dict_detailed["dual_averages"] = dual_averages_plot_info
+
+            # Write detailed results to file: 
+            open(json_detailed_output_file_complete, "w") do f
+              JSON3.pretty(f, plot_dict) 
+            end
           end
         end
 
@@ -1151,7 +1184,7 @@ function optimize(
         params.verbosity,
         params.restart_params,
       )
-
+      # println("Restart got: ", current_iteration_stats.restart_used)
       if current_iteration_stats.restart_used != RESTART_CHOICE_NO_RESTART
         solver_state.primal_weight = compute_new_primal_weight(
           last_restart_info,
@@ -1168,6 +1201,8 @@ function optimize(
       if current_iteration_stats.restart_used == RESTART_CHOICE_RESTART_TO_AVERAGE
         solver_state.current_dual_product =
         problem.constraint_matrix' * solver_state.current_dual_solution
+        # println("Restarted to average.")
+        dwifob_solver_state, dwifob_matrix_cache = initialize_dwifob_state(dwifob_params, primal_size, dual_size, dwifob_solver_state.maximum_singular_value)
       end
     end
 
@@ -1748,6 +1783,7 @@ function take_dwifob_step_efficient(
   # And weighted sums of cached matrix products: 
   weighted_K_x_sum = zeros(size(K_x_k))
   weighted_K_trans_y_sum = zeros(size(K_trans_y_k))
+
   for (primal_i, dual_i, alpha_i, K_x_i, K_trans_y_i) in zip(
     dwifob_solver_state.primal_iterates, 
     dwifob_solver_state.dual_iterates, 
@@ -1959,11 +1995,11 @@ function take_dwifob_step_efficient(
     # Keeping track of the KKT passes. 
     solver_state.cumulative_kkt_passes += 1
 
-    if movement == 0.0
-      # The algorithm will terminate at the beginning of the next iteration
-      solver_state.numerical_error = true
-      break
-    end
+    # if movement == 0.0
+    #   # The algorithm will terminate at the beginning of the next iteration
+    #   solver_state.numerical_error = true
+    #   break
+    # end
     # The proof of Theorem 1 requires movement / step_size >= interaction.
     if interaction > 0
       step_size_limit = movement / interaction
@@ -2100,8 +2136,11 @@ function take_dwifob_step_efficient(
       (1 - (solver_state.total_number_iterations + 1)^(-step_params.reduction_exponent)))
     second_term = (step_size * 
       (1 + (solver_state.total_number_iterations + 1)^(-step_params.growth_exponent)))
-    # third_term = 1/(dwifob_solver_state.maximum_singular_value^2 + 1e-4)
+    # third_term = 1/(dwifob_solver_state.maximum_singular_value^2 + 1e-6)
     step_size = min(first_term, second_term) #, third_term)
+    if (mod(solver_state.total_number_iterations, 5) == 0)
+      println("At iteration: ", solver_state.total_number_iterations, " accepted step of: ", step_size^2 * dwifob_solver_state.maximum_singular_value^2)
+    end
   end
   solver_state.step_size = step_size
 end

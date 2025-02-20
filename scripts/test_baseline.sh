@@ -1,15 +1,15 @@
 # Script for testing the PDHG solver: 
-tolerance="1e-8"                 # This is the error tolerance to be used in the solver.
+tolerance="1e-4"                 # This is the error tolerance to be used in the solver.
 INSTANCE="nug08-3rd"             # Instance to solve.
-save_convergence_data="true"    # Whether or not to save convergence data to JSON.
-save_summary="true"             # Whether or not to save the summary to a .csv file 
+save_convergence_data="false"    # Whether or not to save convergence data to JSON.
+save_summary="false"             # Whether or not to save the summary to a .csv file 
 
 instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 base_experiment_name="${INSTANCE}_baseline_pdhg_variants_${tolerance}"
 
 ### The selected solver:
-# declare -a solver_list=("+scaling") 
 declare -a solver_list=("pdhg" "+restarts" "+scaling" "+primal_weight" "+step_size") 
+declare -a solver_list=("+step_size") 
 
 ### Below this point are no settings ####
 json_content='{"datasets": ['

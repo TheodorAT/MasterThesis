@@ -479,6 +479,13 @@ function parse_command_line()
     arg_type = Bool
     default = true
 
+    "--save_detailed_convergence_data"
+    help =
+      "Whether or not to save the detailed convergence data to an easy to read JSON file." *
+      "Used in convergence plots, plotting iterates, and dwifob specific variables.."
+    arg_type = Bool
+    default = false
+
     "--steering_vectors"
     help = 
       "Whether or not to use the experimental feature of incorporating steering" * 
@@ -638,6 +645,7 @@ function process_args(parsed_args)
         restart_params,
         step_size_policy_params,
         parsed_args["save_convergence_data"],
+        parsed_args["save_detailed_convergence_data"],
         parsed_args["steering_vectors"], # FIXME: Clean this up, separate steering vector parameters into DwifobParameters struct instead.
         parsed_args["fast_dwifob"],
         parsed_args["dwifob_option"],
