@@ -42,7 +42,7 @@ output_file_base="./results/${experiment_name}"
 
 declare -a max_memory_list=(0 1 2 3 4 5 6 7 10 15 20 30 40) 
 declare -a max_memory_list=(10) 
-declare -a max_memory_list=(1 2 3 4 5 6) 
+declare -a max_memory_list=(0 1 2 3 4 5 6) 
 # declare -a max_memory_list=(30 40) # These are the ones that we have not yet done for buildingenergy.
 
 #### Below this point there are no more settings: #####
