@@ -1014,6 +1014,11 @@ function optimize(
   primal_averages_plot_info = Vector{Vector{Float64}}()
   dual_averages_plot_info = Vector{Vector{Float64}}()
 
+  primal_hat_iterates_plot_info = Vector{Vector{Float64}}()
+  dual_hat_iterates_plot_info = Vector{Vector{Float64}}()
+  primal_deviation_plot_info = Vector{Vector{Float64}}()
+  dual_deviation_plot_info = Vector{Vector{Float64}}()
+
   iteration = 0
   
   println("Dwifob Restart scheme: ", params.dwifob_restart, ", restart frequency: ", params.dwifob_restart_frequency)
@@ -1070,7 +1075,17 @@ function optimize(
           push!(dual_iterates_plot_info, solver_state.current_dual_solution)
           push!(primal_averages_plot_info, avg_primal_solution)
           push!(dual_averages_plot_info, avg_dual_solution)
-          # TODO: Add deviations to this plot info as well.
+
+          # The dwifob specific parameters:
+          if (isempty(dwifob_solver_state.x_hat_iterates))
+            push!(primal_hat_iterates_plot_info, solver_state.current_primal_solution)
+            push!(dual_hat_iterates_plot_info, solver_state.current_dual_solution)
+          else 
+            push!(primal_hat_iterates_plot_info, last(dwifob_solver_state.x_hat_iterates))
+            push!(dual_hat_iterates_plot_info, last(dwifob_solver_state.y_hat_iterates))
+          end 
+          push!(primal_deviation_plot_info, dwifob_solver_state.current_primal_deviation)
+          push!(dual_deviation_plot_info, dwifob_solver_state.current_dual_deviation)          
         end
       end 
 
@@ -1154,9 +1169,15 @@ function optimize(
             plot_dict_detailed["primal_averages"] = primal_averages_plot_info
             plot_dict_detailed["dual_averages"] = dual_averages_plot_info
 
+            # The dwifob info: 
+            plot_dict_detailed["primal_hat_iterates"] = primal_hat_iterates_plot_info
+            plot_dict_detailed["dual_hat_iterates"] = dual_hat_iterates_plot_info
+            plot_dict_detailed["primal_deviations"] = primal_deviation_plot_info
+            plot_dict_detailed["dual_deviations"] = dual_deviation_plot_info
+
             # Write detailed results to file: 
             open(json_detailed_output_file_complete, "w") do f
-              JSON3.pretty(f, plot_dict) 
+              JSON3.pretty(f, plot_dict_detailed) 
             end
           end
         end
