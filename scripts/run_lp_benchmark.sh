@@ -8,9 +8,10 @@
 #   pdlp (which uses pdhg including optimizations made in the google research papers)
 #   dwifob+step_size (uses dwifob + PDLP optimizations up to dynamic step size.)
 #   scs (which uses scs, a free to use solver in Julia)
-solver="dwifob"
+solver="dwifob+primal"
 tolerance="1e-4"        # This is the error tolerance to be used in the solver.
 iteration_limit="10000" # Iteration limit for the test run. 
+dwifob_option="alt_C"           # Chose between "alt_A", "alt_B", "alt_C", anything else means the original.
 
 # Get a list of all instances:
 declare -a instances=() 
@@ -20,12 +21,11 @@ while IFS= read -r line; do
   fi
 done < "./benchmarking/lp_benchmark_instance_list"
 
-save_convergence_data="false"
-max_memory_input="[3]"
+save_convergence_data="true"
+max_memory_input="[1]"
 
 # declare -a instances=("nug08-3rd") # For testing the script
-experiment_name="fast_lp_benchmark_${solver}_${tolerance}_m=${max_memory_input}"
-experiment_name="fast_lp_benchmark_${solver}_${tolerance}"
+experiment_name="fast_lp_benchmark_${solver}_${dwifob_option}_m=${max_memory_input}_${tolerance}"
 
 # Below are no more settings:
 output_dir="./results/${experiment_name}"
@@ -110,8 +110,9 @@ elif [ "$solver" == "dwifob" ]; then
         --primal_weight_update_smoothing 0.0 \
         --scale_invariant_initial_primal_weight false \
         --steering_vectors true \
-        --max_memory "${max_memory_input}" \
         --fast_dwifob true \
+        --dwifob_option ${dwifob_option} \
+        --max_memory "${max_memory_input}" \
         --save_convergence_data ${save_convergence_data}
 
   done
@@ -132,6 +133,7 @@ elif [ "$solver" == "dwifob+primal" ]; then
         --steering_vectors true \
         --max_memory "${max_memory_input}" \
         --fast_dwifob true \
+        --dwifob_option ${dwifob_option} \
         --dwifob_restart "constant" \
         --dwifob_restart_frequency 40 \
         --save_convergence_data ${save_convergence_data}
@@ -153,6 +155,7 @@ elif [ "$solver" == "dwifob+step_size" ]; then
         --steering_vectors true \
         --max_memory "${max_memory_input}" \
         --fast_dwifob true \
+        --dwifob_option ${dwifob_option} \
         --dwifob_restart "constant" \
         --dwifob_restart_frequency 40 \
         --save_convergence_data ${save_convergence_data}

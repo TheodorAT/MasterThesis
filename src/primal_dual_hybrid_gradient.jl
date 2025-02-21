@@ -1235,8 +1235,13 @@ function optimize(
         new_x = dwifob_solver_state.current_u_hat_x_deviation_sum
         new_y = dwifob_solver_state.current_u_hat_y_deviation_sum
         dwifob_solver_state, dwifob_matrix_cache = initialize_dwifob_state(dwifob_params, primal_size, dual_size, dwifob_solver_state.maximum_singular_value)
-        solver_state.current_primal_solution = new_x
-        solver_state.current_dual_solution = new_y
+        if (params.dwifob_option == "alt_C")
+          solver_state.current_primal_solution = -new_x
+          solver_state.current_dual_solution = -new_y  
+        else 
+          solver_state.current_primal_solution = new_x
+          solver_state.current_dual_solution = new_y
+        end
       end
     end
     time_spent_doing_basic_algorithm_checkpoint = time()
@@ -1259,18 +1264,16 @@ function optimize(
     end
     
     if params.steering_vectors
-      if params.fast_dwifob
+      if params.dwifob_option == "alt_A"
+        take_dwifob_step_alt_A(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
+      elseif params.dwifob_option == "alt_B"
+        take_dwifob_step_alt_B(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
+      elseif params.dwifob_option == "alt_C"
+        take_dwifob_step_alt_C(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
+      elseif params.fast_dwifob
         take_dwifob_step_efficient(params.step_size_policy_params, problem, solver_state, dwifob_solver_state, dwifob_matrix_cache)
       else
-        if params.dwifob_option == "alt_A"
-          take_dwifob_step_alt_A(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
-        elseif params.dwifob_option == "alt_B"
-          take_dwifob_step_alt_B(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
-        elseif params.dwifob_option == "alt_C"
-          take_dwifob_step_alt_C(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
-        else
-          take_dwifob_step(params.step_size_policy_params, problem, solver_state, dwifob_solver_state) 
-        end
+        take_dwifob_step(params.step_size_policy_params, problem, solver_state, dwifob_solver_state) 
       end      
     else 
       take_step(params.step_size_policy_params, problem, solver_state)
@@ -1396,7 +1399,7 @@ function initialize_dwifob_state(
     0,                        # current_iteration
     1,                        # lambda_k
     1,                        # lambda_next
-    0.99,                     # zeta_k
+    0.5,                     # zeta_k
     1e-4,                     # epsilon
     maximum_singular_value,   # maximum singular value of K.
     x_list,                   # primal_iterates

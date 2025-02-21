@@ -1,19 +1,19 @@
 # Script for testing the DWIFOB solver: 
 use_fast="false"              # If we want to use the faster version of dwifob. 
 tolerance="1e-4"              # The error tolerance to be used in the solver:
-save_convergence_data="true"  # If we want to save convergence results to a .json file. 
-save_detailed="true"          # If we want to save the detailed results to a .json file.
+save_convergence_data="false" # If we want to save convergence results to a .json file. 
+save_detailed="false"         # If we want to save the detailed results to a .json file.
 save_summary="true"           # If we want to save the summary to a .csv file
 iteration_limit="5000"        # The iteration limit for each solver and problem.
 
 # The selected solver: (different versions of dwifob) available options: 
 # "dwifob", "+restarts", "+scaling", "+primal_weight", "+step_size"
-solver="dwifob"
-PDLP_restart_scheme="no_restart"  # Default: "adaptive_normalized", others: "no_restart", 
-                                  # "adaptive_localized", "adaptive_distance"
-restart_scheme="no"          # Chose between "constant", "PDLP", "NOFOB", anything else means no restarts.
+solver="+primal_weight"
+PDLP_restart_scheme="adaptive_normalized"   # Default: "adaptive_normalized", others: "no_restart", 
+                                            # "adaptive_localized", "adaptive_distance"
+restart_scheme="constant"                   # Chose between "constant", "PDLP", "NOFOB", anything else means no restarts.
 restart_frequency=40
-dwifob_option="nothing"           # Chose between "alt_A", "alt_B", "alt_C", anything else means the original.
+dwifob_option="org"           # Chose between "alt_A", "alt_B", "alt_C", anything else means the original.
 termination_eval_freq=1           # The frequency of evaluating if we have reached 
                                   # the solution, this also affects the granularity of the saved results.
 
@@ -28,21 +28,21 @@ termination_eval_freq=1           # The frequency of evaluating if we have reach
 # - karted
 # larger: buildingenergy, 
 
-# INSTANCE="nug08-3rd"
-# instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
-INSTANCE="less_trivial_lp"
-instance_path=./test/less_trivial_lp_model.mps
+INSTANCE="self"
+instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
+# INSTANCE="less_trivial_lp"
+# instance_path=./test/less_trivial_lp_model.mps
 
 # Select fitting name of experiment:
 # experiment_name="${INSTANCE}_dwifob_slow_${tolerance}"
 # experiment_name="${INSTANCE}_dwifob_${solver}_restart=PDLP_${tolerance}"
-experiment_name="${INSTANCE}_dwifob_${solver}_restart=${restart_frequency}_${tolerance}"
 experiment_name="${INSTANCE}_dwifob_${solver}_${tolerance}"
+experiment_name="${INSTANCE}_dwifob_${dwifob_option}_${solver}_restart=NOFOB_${restart_frequency}_${tolerance}"
+experiment_name="${INSTANCE}_dwifob_zeta=0.5_${dwifob_option}_${solver}_restart=${restart_frequency}_${tolerance}"
 output_file_base="./results/${experiment_name}"
 
+declare -a max_memory_list=(0 1)
 declare -a max_memory_list=(0 1 2 3 4 5 6 7 10 15 20 30 40) 
-declare -a max_memory_list=(10) 
-declare -a max_memory_list=(0 1 2 3 4 5 6) 
 # declare -a max_memory_list=(30 40) # These are the ones that we have not yet done for buildingenergy.
 
 #### Below this point there are no more settings: #####
