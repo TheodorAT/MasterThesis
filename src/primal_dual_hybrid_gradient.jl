@@ -1399,7 +1399,7 @@ function initialize_dwifob_state(
     0,                        # current_iteration
     1,                        # lambda_k
     1,                        # lambda_next
-    0.5,                     # zeta_k
+    0.99,                     # zeta_k
     1e-4,                     # epsilon
     maximum_singular_value,   # maximum singular value of K.
     x_list,                   # primal_iterates
