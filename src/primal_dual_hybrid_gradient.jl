@@ -1150,7 +1150,7 @@ function optimize(
         if (params.should_save_convergence_data)
           json_output_file = chop(output_file, head = 10, tail = 0)
           json_output_file_complete = "./results/datapoints/$(json_output_file).json"
-          println("new output file: ", json_output_file_complete)
+          println("saving convergence information to: ", json_output_file_complete)
           
           plot_dict = Dict()
           plot_dict["iterations"] = iterate_plot_info
@@ -1160,8 +1160,11 @@ function optimize(
           open(json_output_file_complete, "w") do f
             JSON3.pretty(f, plot_dict) 
           end
+        
           if (params.should_save_detailed_data)
             json_detailed_output_file_complete = "./results/datapoints/$(json_output_file)_detailed.json"
+            println("saving detailed convergence information to:\n", 
+                    json_detailed_output_file_complete)
 
             plot_dict_detailed = Dict()
             plot_dict_detailed["primal_iterates"] = primal_iterates_plot_info

@@ -1,8 +1,8 @@
 # Script for testing the DWIFOB solver: 
 use_fast="false"              # If we want to use the faster version of dwifob. 
 tolerance="1e-4"              # The error tolerance to be used in the solver:
-save_convergence_data="false" # If we want to save convergence results to a .json file. 
-save_detailed="false"         # If we want to save the detailed results to a .json file.
+save_convergence_data="true" # If we want to save convergence results to a .json file. 
+save_detailed="true"         # If we want to save the detailed results to a .json file.
 save_summary="true"           # If we want to save the summary to a .csv file
 iteration_limit="5000"        # The iteration limit for each solver and problem.
 
@@ -37,12 +37,13 @@ instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 # experiment_name="${INSTANCE}_dwifob_slow_${tolerance}"
 # experiment_name="${INSTANCE}_dwifob_${solver}_restart=PDLP_${tolerance}"
 experiment_name="${INSTANCE}_dwifob_${solver}_${tolerance}"
-experiment_name="${INSTANCE}_dwifob_${dwifob_option}_${solver}_restart=NOFOB_${restart_frequency}_${tolerance}"
 experiment_name="${INSTANCE}_dwifob_zeta=0.5_${dwifob_option}_${solver}_restart=${restart_frequency}_${tolerance}"
+experiment_name="${INSTANCE}_dwifob_${dwifob_option}_${solver}_restart=${restart_frequency}_${tolerance}"
 output_file_base="./results/${experiment_name}"
 
 declare -a max_memory_list=(0 1)
 declare -a max_memory_list=(0 1 2 3 4 5 6 7 10 15 20 30 40) 
+declare -a max_memory_list=(0 1 3 5 10 15 20 30 40) 
 # declare -a max_memory_list=(30 40) # These are the ones that we have not yet done for buildingenergy.
 
 #### Below this point there are no more settings: #####
