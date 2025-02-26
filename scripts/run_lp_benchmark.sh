@@ -11,7 +11,7 @@
 solver="dwifob+primal"
 tolerance="1e-4"        # This is the error tolerance to be used in the solver.
 iteration_limit="10000" # Iteration limit for the test run. 
-dwifob_option="alt_C"           # Chose between "alt_A", "alt_B", "alt_C", anything else means the original.
+dwifob_option="original"           # Chose between "alt_A", "alt_B", "alt_C", anything else means the original.
 
 # Get a list of all instances:
 declare -a instances=() 
@@ -21,11 +21,12 @@ while IFS= read -r line; do
   fi
 done < "./benchmarking/lp_benchmark_instance_list"
 
-save_convergence_data="true"
+save_convergence_data="false"
 max_memory_input="[1]"
 
 # declare -a instances=("nug08-3rd") # For testing the script
-experiment_name="fast_lp_benchmark_${solver}_${dwifob_option}_m=${max_memory_input}_${tolerance}"
+experiment_name="fast_lp_benchmark_${solver}_${dwifob_option}_${tolerance}_m=${max_memory_input}"
+experiment_name="fast_lp_benchmark_${solver}__${tolerance}_m=${max_memory_input}"
 
 # Below are no more settings:
 output_dir="./results/${experiment_name}"
