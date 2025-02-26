@@ -1,8 +1,9 @@
 # Script for testing the DWIFOB solver: 
 use_fast="false"              # If we want to use the faster version of dwifob. 
 tolerance="1e-4"              # The error tolerance to be used in the solver:
-save_convergence_data="true" # If we want to save convergence results to a .json file. 
-save_detailed="true"         # If we want to save the detailed results to a .json file.
+save_convergence_data="true"  # If we want to save convergence results to a .json file. 
+save_detailed="true"          # If we want to save the detailed results to a .json file.
+save_solution_json="false"    # Whether or not to save last iterates to JSON.
 save_summary="true"           # If we want to save the summary to a .csv file
 iteration_limit="5000"        # The iteration limit for each solver and problem.
 
@@ -74,6 +75,7 @@ if [ "$solver" == "dwifob" ]; then # This is the baseline vanilla dwifob:
         --restart_scheme "no_restart" \
         --primal_weight_update_smoothing 0.0 \
         --scale_invariant_initial_primal_weight false \
+        --save_solution_json ${save_solution_json} \
         --save_convergence_data ${save_convergence_data} \
         --save_detailed_convergence_data ${save_detailed} \
         --steering_vectors ${use_steering} \
@@ -97,6 +99,7 @@ elif [ "$solver" == "+restarts" ]; then
         --restart_scheme ${PDLP_restart_scheme} \
         --primal_weight_update_smoothing 0.0 \
         --scale_invariant_initial_primal_weight false \
+        --save_solution_json ${save_solution_json} \
         --save_convergence_data ${save_convergence_data} \
         --save_detailed_convergence_data ${save_detailed} \
         --steering_vectors ${use_steering} \
@@ -119,6 +122,7 @@ elif [ "$solver" == "+scaling" ]; then
         --restart_scheme ${PDLP_restart_scheme} \
         --primal_weight_update_smoothing 0.0 \
         --scale_invariant_initial_primal_weight false \
+        --save_solution_json ${save_solution_json} \
         --save_convergence_data ${save_convergence_data} \
         --save_detailed_convergence_data ${save_detailed} \
         --steering_vectors ${use_steering} \
@@ -139,6 +143,7 @@ elif [ "$solver" == "+primal_weight" ]; then
         --termination_evaluation_frequency ${termination_eval_freq} \
         --step_size_policy constant \
         --restart_scheme ${PDLP_restart_scheme} \
+        --save_solution_json ${save_solution_json} \
         --save_convergence_data ${save_convergence_data} \
         --save_detailed_convergence_data ${save_detailed} \
         --steering_vectors ${use_steering} \
@@ -158,6 +163,7 @@ elif [ "$solver" == "+step_size" ]; then
         --iteration_limit $iteration_limit \
         --termination_evaluation_frequency ${termination_eval_freq} \
         --restart_scheme ${PDLP_restart_scheme} \
+        --save_solution_json ${save_solution_json} \
         --save_convergence_data ${save_convergence_data} \
         --save_detailed_convergence_data ${save_detailed} \
         --steering_vectors ${use_steering} \

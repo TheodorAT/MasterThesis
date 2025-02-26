@@ -472,6 +472,13 @@ function parse_command_line()
     arg_type = Float64
     default = 1.0
 
+    "--save_solution_json"
+    help = 
+      "Whether or not to save the last iterates to an easy to read JSON file." * 
+      "Used for finding a very accurate solution to a problem, in convergence plots."
+    arg_type = Bool
+    default = false
+
     "--save_convergence_data"
     help =
       "Whether or not to save the convergence data to an easy to read JSON file." *
@@ -644,6 +651,7 @@ function process_args(parsed_args)
         termination_criteria,
         restart_params,
         step_size_policy_params,
+        parsed_args["save_solution_json"],
         parsed_args["save_convergence_data"],
         parsed_args["save_detailed_convergence_data"],
         parsed_args["steering_vectors"], # FIXME: Clean this up, separate steering vector parameters into DwifobParameters struct instead.

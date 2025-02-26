@@ -200,6 +200,9 @@ struct PdhgParameters
     ConstantStepsizeParams,
   }
 
+  """ Whether or not to save the last iterates in a json file or not"""
+  save_solution_json::Bool
+
   """ Whether or not the program should save the convergence stats in a json file or not"""
   should_save_convergence_data::Bool
 
@@ -1148,7 +1151,7 @@ function optimize(
         )
         
         if (params.should_save_convergence_data)
-          json_output_file = chop(output_file, head = 10, tail = 0)
+          json_output_file = chop(output_file, head = 10, tail = 0) # Removes the "./results/" start of the string.  
           json_output_file_complete = "./results/datapoints/$(json_output_file).json"
           println("saving convergence information to: ", json_output_file_complete)
           
@@ -1182,6 +1185,22 @@ function optimize(
             open(json_detailed_output_file_complete, "w") do f
               JSON3.pretty(f, plot_dict_detailed) 
             end
+          end
+        end
+
+        if (params.save_solution_json)
+          json_output_file = chop(output_file, head = 10, tail = 0) # Removes the "./results/" start of the string.  
+          json_solution_output_file_complete = "./results/datapoints/$(json_output_file)_solution.json"
+          println("saving last iterate to: ", json_solution_output_file_complete)
+          
+          # Uncomment these lines when we want to store an accurate solution only. # FIXME: Make this a setting instead. 
+          solution_dict = Dict()
+          solution_dict["primal_solution"] = solver_state.current_primal_solution
+          solution_dict["dual_solution"] = solver_state.current_dual_solution
+
+          # Write detailed results to file: 
+          open(json_solution_output_file_complete, "w") do f
+            JSON3.pretty(f, solution_dict) 
           end
         end
 

@@ -1,8 +1,12 @@
 # Script for testing the PDHG solver: 
-tolerance="1e-4"                 # This is the error tolerance to be used in the solver.
-INSTANCE="nug08-3rd"             # Instance to solve.
-save_convergence_data="false"    # Whether or not to save convergence data to JSON.
+tolerance="1e-12"                 # This is the error tolerance to be used in the solver.
+INSTANCE="self"                  # Instance to solve.
+save_convergence_data="false"     # Whether or not to save convergence data to JSON.
+save_detailed="false"             # Whether or not to save detailed convergence data to JSON.
+save_solution_json="true"        # Whether or not to save last iterates to JSON.
 save_summary="false"             # Whether or not to save the summary to a .csv file 
+termination_eval_freq=1          # The frequency of evaluating if we have reached a solution, 
+                                 # this also affects the granularity of the saved results.
 
 instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 base_experiment_name="${INSTANCE}_baseline_pdhg_variants_${tolerance}"
@@ -22,7 +26,7 @@ do
    echo "Solving ${INSTANCE} with ${solver}..."
 
    if [ "$solver" == "pdhg" ]; then # This is the baseline vanilla PDHG:   
-   julia --project=scripts scripts/solve_qp.jl \
+      julia --project=scripts scripts/solve_qp.jl \
          --instance_path $instance_path \
          --output_dir $output_dir \
          --method "pdhg" \
@@ -36,7 +40,10 @@ do
          --restart_scheme "no_restart" \
          --primal_weight_update_smoothing 0.0 \
          --scale_invariant_initial_primal_weight false \
-         --save_convergence_data ${save_convergence_data}
+         --termination_evaluation_frequency ${termination_eval_freq} \
+         --save_solution_json ${save_solution_json} \
+         --save_convergence_data ${save_convergence_data} \
+         --save_detailed_convergence_data ${save_detailed} 
 
    elif [ "$solver" == "+restarts" ]; then
       julia --project=scripts scripts/solve_qp.jl \
@@ -52,7 +59,10 @@ do
          --l2_norm_rescaling false \
          --primal_weight_update_smoothing 0.0 \
          --scale_invariant_initial_primal_weight false \
-         --save_convergence_data ${save_convergence_data}
+         --termination_evaluation_frequency ${termination_eval_freq} \
+         --save_solution_json ${save_solution_json} \
+         --save_convergence_data ${save_convergence_data} \
+         --save_detailed_convergence_data ${save_detailed}
 
    elif [ "$solver" == "+scaling" ]; then
       julia --project=scripts scripts/solve_qp.jl \
@@ -65,7 +75,10 @@ do
          --step_size_policy constant \
          --primal_weight_update_smoothing 0.0 \
          --scale_invariant_initial_primal_weight false \
-         --save_convergence_data ${save_convergence_data}  
+         --termination_evaluation_frequency ${termination_eval_freq} \
+         --save_solution_json ${save_solution_json} \
+         --save_convergence_data ${save_convergence_data} \
+         --save_detailed_convergence_data ${save_detailed}
          
    elif [ "$solver" == "+primal_weight" ]; then
       julia --project=scripts scripts/solve_qp.jl \
@@ -76,7 +89,10 @@ do
          --absolute_optimality_tol ${tolerance} \
          --iteration_limit 5000 \
          --step_size_policy constant \
-         --save_convergence_data ${save_convergence_data}
+         --termination_evaluation_frequency ${termination_eval_freq} \
+         --save_solution_json ${save_solution_json} \
+         --save_convergence_data ${save_convergence_data} \
+         --save_detailed_convergence_data ${save_detailed}
 
    elif [ "$solver" == "+step_size" ]; then
       julia --project=scripts scripts/solve_qp.jl \
@@ -86,7 +102,10 @@ do
          --relative_optimality_tol ${tolerance} \
          --absolute_optimality_tol ${tolerance} \
          --iteration_limit 5000 \
-         --save_convergence_data ${save_convergence_data}
+         --termination_evaluation_frequency ${termination_eval_freq} \
+         --save_solution_json ${save_solution_json} \
+         --save_convergence_data ${save_convergence_data} \
+         --save_detailed_convergence_data ${save_detailed}
 
    fi
    
