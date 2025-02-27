@@ -1388,7 +1388,7 @@ function squared_norm_M(
 end
 
 """ 
-Calculates the norm: || [x, y] ||_M 
+Calculates the norm: (|| [x, y] ||_M)^2 
 with respect to the M matrix efficiently using cached values of K*x 
 """
 function squared_norm_M_fast(
@@ -2738,4 +2738,74 @@ function take_dwifob_step_alt_C(
   dwifob_solver_state.current_dual_deviation = u_y_next
   push!(dwifob_solver_state.x_hat_iterates, x_hat_next)
   push!(dwifob_solver_state.y_hat_iterates, y_hat_next)  
+end
+
+"""
+  An inertial variant of PDHG, using the DWIFOB struct out of convenience for now. 
+"""
+function take_inertial_pdhg_step(
+  step_params::ConstantStepsizeParams,
+  problem::QuadraticProgrammingProblem,
+  solver_state::PdhgSolverState,
+  dwifob_solver_state::DwifobSolverState,
+)
+  
+  # How far back do we remember when calculating the inertial term?
+  m_k = min(dwifob_solver_state.max_memory, dwifob_solver_state.current_iteration)
+  
+  # We store the previous "steps" i.e. differences between iterates,
+  # in the x_hat_iterates list for convenience for now.
+  
+  # First we take a regular PDHG step: 
+  
+
+
+  # Initializing the hat variables of the algorithm:
+  if (dwifob_solver_state.current_iteration == 0)
+    push!(dwifob_solver_state.x_hat_iterates, solver_state.current_primal_solution)
+    push!(dwifob_solver_state.y_hat_iterates, solver_state.current_dual_solution)
+  end
+
+  # Extracting some variables from the solver state struct
+  # for clearer and more concise code:  
+  x_hat_k = last(dwifob_solver_state.x_hat_iterates)
+  y_hat_k = last(dwifob_solver_state.y_hat_iterates)
+
+  x_k = solver_state.current_primal_solution
+  y_k = solver_state.current_dual_solution
+
+  u_x_k = dwifob_solver_state.current_primal_deviation
+  u_y_k = dwifob_solver_state.current_dual_deviation
+
+  lambda_k = dwifob_solver_state.lambda_k
+  lambda_next = dwifob_solver_state.lambda_next
+
+  if isnan(x_hat_k[1]) 
+    println("Got NaN in iterates, aborting...")
+    exit(1)
+  end
+
+  # Calculating the primal "pseudogradient" (p_x_k) value:
+  primal_gradient = problem.objective_vector - problem.constraint_matrix' * y_hat_k
+  p_x_k = x_hat_k - (solver_state.step_size / solver_state.primal_weight) * primal_gradient
+  project_primal!(p_x_k, problem)
+
+  # Calculating the dual "pseudogradient" (p_y_k) value: 
+  dual_gradient = problem.right_hand_side - problem.constraint_matrix * (2 * p_x_k - x_hat_k)
+  p_y_k = y_hat_k + (solver_state.step_size * solver_state.primal_weight) * dual_gradient
+  project_dual!(p_y_k, problem)
+
+  # Calculating the next iterates:
+  x_next = x_k + lambda_k * (p_x_k - x_hat_k)
+  y_next = y_k + lambda_k * (p_y_k - y_hat_k)
+  K_trans_y_next = problem.constraint_matrix' * y_next
+
+  # Update the solver state: 
+  update_solution_in_solver_state(
+    solver_state,
+    x_next,
+    y_next,
+    K_trans_y_next,
+  )
+
 end

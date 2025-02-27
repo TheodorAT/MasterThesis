@@ -2,7 +2,7 @@
 use_fast="true"              # If we want to use the faster version of dwifob. 
 tolerance="1e-4"              # The error tolerance to be used in the solver:
 save_convergence_data="true"  # If we want to save convergence results to a .json file. 
-save_detailed="true"          # If we want to save the detailed results to a .json file.
+save_detailed="false"          # If we want to save the detailed results to a .json file.
 save_summary="true"           # If we want to save the summary to a .csv file
 iteration_limit="5000"        # The iteration limit for each solver and problem.
 
@@ -14,7 +14,7 @@ PDLP_restart_scheme="adaptive_normalized"   # Default: "adaptive_normalized", ot
 restart_scheme="constant"                   # Chose between "constant", "PDLP", "NOFOB", anything else means no restarts.
 restart_frequency=40
 dwifob_option="org"           # Chose between "alt_A", "alt_B", "alt_C", anything else means the original.
-termination_eval_freq=1           # The frequency of evaluating if we have reached 
+termination_eval_freq=40           # The frequency of evaluating if we have reached 
                                   # the solution, this also affects the granularity of the saved results.
 
 # Select the instance: 
@@ -38,7 +38,7 @@ instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 # experiment_name="${INSTANCE}_dwifob_${solver}_restart=PDLP_${tolerance}"
 experiment_name="${INSTANCE}_dwifob_${solver}_${tolerance}"
 experiment_name="${INSTANCE}_dwifob_zeta=0.5_${dwifob_option}_${solver}_restart=${restart_frequency}_${tolerance}"
-experiment_name="${INSTANCE}_dwifob_${dwifob_option}_${solver}_restart=${restart_frequency}_${tolerance}"
+experiment_name="${INSTANCE}_dwifob_${dwifob_option}_${solver}_restart=${restart_frequency}_terminationfreq=40_${tolerance}"
 output_file_base="./results/${experiment_name}"
 
 declare -a max_memory_list=(1)
