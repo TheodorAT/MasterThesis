@@ -1012,6 +1012,9 @@ function optimize(
   # For plotting: 
   iterate_plot_info = Vector{Float64}()
   rel_duality_gap_plot_info = Vector{Float64}()
+  l2_primal_residual_plot_info = Vector{Float64}()
+  l2_dual_residual_plot_info = Vector{Float64}()
+  
   primal_iterates_plot_info = Vector{Vector{Float64}}()
   dual_iterates_plot_info = Vector{Vector{Float64}}()
   primal_averages_plot_info = Vector{Vector{Float64}}()
@@ -1069,10 +1072,11 @@ function optimize(
       )
       
       if (params.should_save_convergence_data)       
-        # Storing values for plotting: FIXME: Do we need higher resolution for this?
-        # or is every 40 points (when we evaulate termination) enough?
         push!(iterate_plot_info, iteration)
         push!(rel_duality_gap_plot_info, current_iteration_stats.convergence_information[1].relative_optimality_gap)        
+        push!(l2_primal_residual_plot_info, current_iteration_stats.convergence_information[1].l2_primal_residual)
+        push!(l2_dual_residual_plot_info, current_iteration_stats.convergence_information[1].l2_dual_residual)
+        
         if (params.should_save_detailed_data)
           push!(primal_iterates_plot_info, solver_state.current_primal_solution)
           push!(dual_iterates_plot_info, solver_state.current_dual_solution)
@@ -1158,7 +1162,9 @@ function optimize(
           plot_dict = Dict()
           plot_dict["iterations"] = iterate_plot_info
           plot_dict["rel_duality_gap"] = rel_duality_gap_plot_info
-
+          plot_dict["l2_primal_residual"] = l2_primal_residual_plot_info
+          plot_dict["l2_dual_residual"] = l2_dual_residual_plot_info
+          
           # Write convergence results to file: 
           open(json_output_file_complete, "w") do f
             JSON3.pretty(f, plot_dict) 

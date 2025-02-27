@@ -1,9 +1,8 @@
 # Script for testing the DWIFOB solver: 
-use_fast="false"              # If we want to use the faster version of dwifob. 
+use_fast="true"              # If we want to use the faster version of dwifob. 
 tolerance="1e-4"              # The error tolerance to be used in the solver:
 save_convergence_data="true"  # If we want to save convergence results to a .json file. 
 save_detailed="true"          # If we want to save the detailed results to a .json file.
-save_solution_json="false"    # Whether or not to save last iterates to JSON.
 save_summary="true"           # If we want to save the summary to a .csv file
 iteration_limit="5000"        # The iteration limit for each solver and problem.
 
@@ -29,7 +28,7 @@ termination_eval_freq=1           # The frequency of evaluating if we have reach
 # - karted
 # larger: buildingenergy, 
 
-INSTANCE="self"
+INSTANCE="savsched1"
 instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 # INSTANCE="less_trivial_lp"
 # instance_path=./test/less_trivial_lp_model.mps
@@ -42,9 +41,9 @@ experiment_name="${INSTANCE}_dwifob_zeta=0.5_${dwifob_option}_${solver}_restart=
 experiment_name="${INSTANCE}_dwifob_${dwifob_option}_${solver}_restart=${restart_frequency}_${tolerance}"
 output_file_base="./results/${experiment_name}"
 
-declare -a max_memory_list=(0 1)
-declare -a max_memory_list=(0 1 2 3 4 5 6 7 10 15 20 30 40) 
-declare -a max_memory_list=(0 1 3 5 10 15 20 30 40) 
+declare -a max_memory_list=(1)
+declare -a max_memory_list=(1 2 3 4 5 6 7 10 15 20 30 40) 
+declare -a max_memory_list=(1 3 5 10 15 20 40) 
 # declare -a max_memory_list=(30 40) # These are the ones that we have not yet done for buildingenergy.
 
 #### Below this point there are no more settings: #####
@@ -75,7 +74,6 @@ if [ "$solver" == "dwifob" ]; then # This is the baseline vanilla dwifob:
         --restart_scheme "no_restart" \
         --primal_weight_update_smoothing 0.0 \
         --scale_invariant_initial_primal_weight false \
-        --save_solution_json ${save_solution_json} \
         --save_convergence_data ${save_convergence_data} \
         --save_detailed_convergence_data ${save_detailed} \
         --steering_vectors ${use_steering} \
@@ -99,7 +97,6 @@ elif [ "$solver" == "+restarts" ]; then
         --restart_scheme ${PDLP_restart_scheme} \
         --primal_weight_update_smoothing 0.0 \
         --scale_invariant_initial_primal_weight false \
-        --save_solution_json ${save_solution_json} \
         --save_convergence_data ${save_convergence_data} \
         --save_detailed_convergence_data ${save_detailed} \
         --steering_vectors ${use_steering} \
@@ -122,7 +119,6 @@ elif [ "$solver" == "+scaling" ]; then
         --restart_scheme ${PDLP_restart_scheme} \
         --primal_weight_update_smoothing 0.0 \
         --scale_invariant_initial_primal_weight false \
-        --save_solution_json ${save_solution_json} \
         --save_convergence_data ${save_convergence_data} \
         --save_detailed_convergence_data ${save_detailed} \
         --steering_vectors ${use_steering} \
@@ -143,7 +139,6 @@ elif [ "$solver" == "+primal_weight" ]; then
         --termination_evaluation_frequency ${termination_eval_freq} \
         --step_size_policy constant \
         --restart_scheme ${PDLP_restart_scheme} \
-        --save_solution_json ${save_solution_json} \
         --save_convergence_data ${save_convergence_data} \
         --save_detailed_convergence_data ${save_detailed} \
         --steering_vectors ${use_steering} \
@@ -163,7 +158,6 @@ elif [ "$solver" == "+step_size" ]; then
         --iteration_limit $iteration_limit \
         --termination_evaluation_frequency ${termination_eval_freq} \
         --restart_scheme ${PDLP_restart_scheme} \
-        --save_solution_json ${save_solution_json} \
         --save_convergence_data ${save_convergence_data} \
         --save_detailed_convergence_data ${save_detailed} \
         --steering_vectors ${use_steering} \

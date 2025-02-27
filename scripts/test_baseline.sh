@@ -1,9 +1,9 @@
 # Script for testing the PDHG solver: 
-tolerance="1e-12"                 # This is the error tolerance to be used in the solver.
-INSTANCE="self"                  # Instance to solve.
-save_convergence_data="false"     # Whether or not to save convergence data to JSON.
-save_detailed="false"             # Whether or not to save detailed convergence data to JSON.
-save_solution_json="true"        # Whether or not to save last iterates to JSON.
+tolerance="1e-4"                 # This is the error tolerance to be used in the solver.
+INSTANCE="savsched1"                  # Instance to solve.
+save_convergence_data="true"     # Whether or not to save convergence data to JSON.
+save_detailed="true"             # Whether or not to save detailed convergence data to JSON.
+save_solution_json="false"        # Whether or not to save last iterates to JSON.
 save_summary="false"             # Whether or not to save the summary to a .csv file 
 termination_eval_freq=1          # The frequency of evaluating if we have reached a solution, 
                                  # this also affects the granularity of the saved results.

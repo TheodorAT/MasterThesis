@@ -171,7 +171,6 @@ function optimality_criteria_met(
   ci = convergence_information
   abs_obj = abs(ci.primal_objective) + abs(ci.dual_objective)
   gap = abs(ci.primal_objective - ci.dual_objective)
-
   if optimality_norm == L_INF
     primal_err = ci.l_inf_primal_residual
     primal_err_baseline = qp_cache.l_inf_norm_primal_right_hand_side
