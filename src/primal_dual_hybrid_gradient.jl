@@ -1298,6 +1298,8 @@ function optimize(
         take_dwifob_step_alt_B(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
       elseif params.dwifob_option == "alt_C"
         take_dwifob_step_alt_C(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
+      elseif params.dwifob_option == "inertial_PDHG"
+        take_inertial_pdhg_step(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
       elseif params.fast_dwifob
         take_dwifob_step_efficient(params.step_size_policy_params, problem, solver_state, dwifob_solver_state, dwifob_matrix_cache)
       else
@@ -2749,55 +2751,42 @@ function take_inertial_pdhg_step(
   solver_state::PdhgSolverState,
   dwifob_solver_state::DwifobSolverState,
 )
-  
   # How far back do we remember when calculating the inertial term?
   m_k = min(dwifob_solver_state.max_memory, dwifob_solver_state.current_iteration)
   
   # We store the previous "steps" i.e. differences between iterates,
   # in the x_hat_iterates list for convenience for now.
-  
-  # First we take a regular PDHG step: 
-  
-
-
-  # Initializing the hat variables of the algorithm:
-  if (dwifob_solver_state.current_iteration == 0)
-    push!(dwifob_solver_state.x_hat_iterates, solver_state.current_primal_solution)
-    push!(dwifob_solver_state.y_hat_iterates, solver_state.current_dual_solution)
-  end
-
-  # Extracting some variables from the solver state struct
-  # for clearer and more concise code:  
-  x_hat_k = last(dwifob_solver_state.x_hat_iterates)
-  y_hat_k = last(dwifob_solver_state.y_hat_iterates)
-
   x_k = solver_state.current_primal_solution
   y_k = solver_state.current_dual_solution
 
-  u_x_k = dwifob_solver_state.current_primal_deviation
-  u_y_k = dwifob_solver_state.current_dual_deviation
-
   lambda_k = dwifob_solver_state.lambda_k
-  lambda_next = dwifob_solver_state.lambda_next
 
-  if isnan(x_hat_k[1]) 
+  if isnan(x_k[1]) 
     println("Got NaN in iterates, aborting...")
     exit(1)
   end
 
   # Calculating the primal "pseudogradient" (p_x_k) value:
-  primal_gradient = problem.objective_vector - problem.constraint_matrix' * y_hat_k
-  p_x_k = x_hat_k - (solver_state.step_size / solver_state.primal_weight) * primal_gradient
+  primal_gradient = problem.objective_vector - problem.constraint_matrix' * y_k
+  p_x_k = x_k - (solver_state.step_size / solver_state.primal_weight) * primal_gradient
   project_primal!(p_x_k, problem)
 
   # Calculating the dual "pseudogradient" (p_y_k) value: 
-  dual_gradient = problem.right_hand_side - problem.constraint_matrix * (2 * p_x_k - x_hat_k)
-  p_y_k = y_hat_k + (solver_state.step_size * solver_state.primal_weight) * dual_gradient
+  dual_gradient = problem.right_hand_side - problem.constraint_matrix * (2 * p_x_k - x_k)
+  p_y_k = y_k + (solver_state.step_size * solver_state.primal_weight) * dual_gradient
   project_dual!(p_y_k, problem)
-
+  
   # Calculating the next iterates:
-  x_next = x_k + lambda_k * (p_x_k - x_hat_k)
-  y_next = y_k + lambda_k * (p_y_k - y_hat_k)
+  if (m_k != 0 && should_use_inertia(x_k, y_k, p_x_k, p_y_k, dwifob_solver_state))  
+    # Calculating the inertial terms: 
+    inertial_term_x, inertial_term_y = calculate_inertia(dwifob_solver_state)    
+    x_next = p_x_k + inertial_term_x
+    y_next = p_y_k + inertial_term_y
+  else 
+    x_next = p_x_k
+    y_next = p_y_k    
+  end 
+  
   K_trans_y_next = problem.constraint_matrix' * y_next
 
   # Update the solver state: 
@@ -2808,4 +2797,69 @@ function take_inertial_pdhg_step(
     K_trans_y_next,
   )
 
+  # Saving the "movement" from this step in the dwifob solver struct.
+  movement_x = x_next - x_k
+  movement_y = y_next - y_k  
+  pushfirst!(dwifob_solver_state.x_hat_iterates, movement_x)
+  pushfirst!(dwifob_solver_state.y_hat_iterates, movement_y)
+
+  # If "memory is full", we forget the movement from the least recent iteration: 
+  if (dwifob_solver_state.current_iteration > m_k) 
+    pop!(dwifob_solver_state.x_hat_iterates)
+    pop!(dwifob_solver_state.y_hat_iterates)
+  end
+
+  # Each iteration of this dwifob implementation calculates a matrix calculation 
+  # using the constraint matrix: K: 1 times, and K^T 1 times. (1 each for steps) 
+  solver_state.cumulative_kkt_passes += 1
+
+  # Updating the changes in the mutable dwifob struct before the next iteration:
+  dwifob_solver_state.current_iteration = dwifob_solver_state.current_iteration + 1
+end
+
+function should_use_inertia(
+  x_cur::Vector{Float64}, 
+  y_cur::Vector{Float64},
+  x_next::Vector{Float64}, 
+  y_next::Vector{Float64},
+  dwifob_solver_state::DwifobSolverState,
+)
+  cur_movement = [(x_next - x_cur); (y_next - y_cur)]
+  prev_movement = [first(dwifob_solver_state.x_hat_iterates); first(dwifob_solver_state.y_hat_iterates)]
+  
+  # If the past two steps are of sufficiently similar direction, we want to add inertia, otherwise not.  
+  cur_movement_unit = cur_movement / norm(cur_movement, 2)
+  prev_movement_unit = prev_movement / norm(prev_movement, 2)
+
+  similarity = cur_movement_unit' * prev_movement_unit  
+  # println("Similarity: ", similarity)
+  # TODO: Perhaps we should use the (weighted) average similarity over multiple iterations?  
+  
+  # This threshold decides when we should use momentum.
+  similarity_threshold = 0.7
+  return similarity >= similarity_threshold
+
+end
+
+function calculate_inertia(
+  dwifob_solver_state::DwifobSolverState,
+)
+  # Hyperparameters: (this will grow haha)
+  beta = 0.1        # Controls the weight of past steps, more frequent have more impact.
+  dampening = 0.4   # Controls the size of the momentum term in relation to the steps. 
+                    # (Very reasonable to keep this below 0.5)
+
+  # Calculate the average movement from the last iterates (stored in hat_iterates for this purpose):
+  vector_x = zeros(size(last(dwifob_solver_state.x_hat_iterates)))
+  vector_y = zeros(size(last(dwifob_solver_state.y_hat_iterates)))
+  count = 0
+  for (step_x, step_y) in zip(dwifob_solver_state.x_hat_iterates, dwifob_solver_state.y_hat_iterates)  
+    vector_x += step_x * (beta^count)
+    vector_y += step_y * (beta^count)
+    count += 1
+  end  
+  vector_x = vector_x * dampening / count
+  vector_y = vector_y * dampening / count
+  
+  return vector_x, vector_y
 end

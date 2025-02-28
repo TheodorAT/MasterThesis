@@ -13,7 +13,7 @@ base_experiment_name="${INSTANCE}_baseline_pdhg_variants_${tolerance}"
 
 ### The selected solver:
 declare -a solver_list=("pdhg" "+restarts" "+scaling" "+primal_weight" "+step_size") 
-declare -a solver_list=("+primal_weight") 
+declare -a solver_list=("+step_size") 
 
 ### Below this point are no settings ####
 json_content='{"datasets": ['
