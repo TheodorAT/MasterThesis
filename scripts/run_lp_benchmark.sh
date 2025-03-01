@@ -11,7 +11,9 @@
 solver="dwifob+primal"
 tolerance="1e-4"        # This is the error tolerance to be used in the solver.
 iteration_limit="10000" # Iteration limit for the test run. 
-dwifob_option="original"           # Chose between "alt_A", "alt_B", "alt_C", anything else means the original.
+dwifob_option="inertial_PDHG"           # Chose between "alt_A", "alt_B", "alt_C", "inertial_PDHG", 
+                                        # anything else means the original.
+termination_evaluation_frequency=1    # How often we should check for termination and restarts.  
 
 # Get a list of all instances:
 declare -a instances=() 
@@ -22,11 +24,12 @@ while IFS= read -r line; do
 done < "./benchmarking/lp_benchmark_instance_list"
 
 save_convergence_data="false"
-max_memory_input="[1]"
+max_memory_input="[3]"
+dwifob_option="inertial_PDHG"
 
 # declare -a instances=("nug08-3rd") # For testing the script
-experiment_name="fast_lp_benchmark_${solver}_${dwifob_option}_${tolerance}_m=${max_memory_input}"
 experiment_name="fast_lp_benchmark_${solver}__${tolerance}_m=${max_memory_input}"
+experiment_name="fast_lp_benchmark_${solver}_${dwifob_option}_${tolerance}_m=${max_memory_input}_granular"
 
 # Below are no more settings:
 output_dir="./results/${experiment_name}"
@@ -38,20 +41,21 @@ if [ "$solver" == "pdhg" ]; then
     instance_path="${HOME}/lp_benchmark/${INSTANCE}.mps.gz"
 
     julia --project=scripts scripts/solve_qp.jl \
-         --instance_path $instance_path \
-         --output_dir $output_dir \
-         --method "pdhg" \
-         --relative_optimality_tol ${tolerance} \
-         --absolute_optimality_tol ${tolerance} \
-         --iteration_limit $iteration_limit \
-         --step_size_policy constant \
-         --l_inf_ruiz_iterations 0 \
-         --pock_chambolle_rescaling false \
-         --l2_norm_rescaling false \
-         --restart_scheme "no_restart" \
-         --primal_weight_update_smoothing 0.0 \
-         --scale_invariant_initial_primal_weight false \
-         --save_convergence_data ${save_convergence_data}
+      --instance_path $instance_path \
+      --output_dir $output_dir \
+      --method "pdhg" \
+      --relative_optimality_tol ${tolerance} \
+      --absolute_optimality_tol ${tolerance} \
+      --iteration_limit $iteration_limit \
+      --termination_evaluation_frequency ${termination_evaluation_frequency} \
+      --step_size_policy constant \
+      --l_inf_ruiz_iterations 0 \
+      --pock_chambolle_rescaling false \
+      --l2_norm_rescaling false \
+      --restart_scheme "no_restart" \
+      --primal_weight_update_smoothing 0.0 \
+      --scale_invariant_initial_primal_weight false \
+      --save_convergence_data ${save_convergence_data}
 
   done
 elif [ "$solver" == "pdhg+primal" ]; then
@@ -61,14 +65,15 @@ elif [ "$solver" == "pdhg+primal" ]; then
     instance_path="${HOME}/lp_benchmark/${INSTANCE}.mps.gz"
 
     julia --project=scripts scripts/solve_qp.jl \
-        --instance_path $instance_path \
-        --output_dir $output_dir \
-        --method "pdhg" \
-        --relative_optimality_tol ${tolerance} \
-        --absolute_optimality_tol ${tolerance} \
-        --iteration_limit $iteration_limit \
-        --step_size_policy "constant" \
-        --save_convergence_data ${save_convergence_data}
+      --instance_path $instance_path \
+      --output_dir $output_dir \
+      --method "pdhg" \
+      --relative_optimality_tol ${tolerance} \
+      --absolute_optimality_tol ${tolerance} \
+      --iteration_limit $iteration_limit \
+      --termination_evaluation_frequency ${termination_evaluation_frequency} \
+      --step_size_policy "constant" \
+      --save_convergence_data ${save_convergence_data}
 
   done
 elif [ "$solver" == "pdlp" ]; then
@@ -79,13 +84,14 @@ elif [ "$solver" == "pdlp" ]; then
 
     # Calling the solver with the default settings, which include the optimization techniques from the google research papers.
     julia --project=scripts scripts/solve_qp.jl \
-         --instance_path $instance_path \
-         --output_dir $output_dir \
-         --method "pdhg" \
-         --relative_optimality_tol ${tolerance} \
-         --absolute_optimality_tol ${tolerance} \
-         --iteration_limit $iteration_limit \
-         --save_convergence_data ${save_convergence_data}
+      --instance_path $instance_path \
+      --output_dir $output_dir \
+      --method "pdhg" \
+      --relative_optimality_tol ${tolerance} \
+      --absolute_optimality_tol ${tolerance} \
+      --iteration_limit $iteration_limit \
+      --termination_evaluation_frequency ${termination_evaluation_frequency} \
+      --save_convergence_data ${save_convergence_data}
 
   done
 elif [ "$solver" == "dwifob" ]; then
@@ -97,24 +103,25 @@ elif [ "$solver" == "dwifob" ]; then
     # Add the settings to make the solver remove the optimizations made in the google paper, leaving only the pure PDHG method.
     # Additionally, we add the argument for using steering vectors.
     julia --project=scripts scripts/solve_qp.jl \
-        --instance_path $instance_path \
-        --output_dir $output_dir \
-        --method "pdhg" \
-        --relative_optimality_tol ${tolerance} \
-        --absolute_optimality_tol ${tolerance} \
-        --iteration_limit $iteration_limit \
-        --step_size_policy "constant" \
-        --l_inf_ruiz_iterations 0 \
-        --pock_chambolle_rescaling false \
-        --l2_norm_rescaling false \
-        --restart_scheme "no_restart" \
-        --primal_weight_update_smoothing 0.0 \
-        --scale_invariant_initial_primal_weight false \
-        --steering_vectors true \
-        --fast_dwifob true \
-        --dwifob_option ${dwifob_option} \
-        --max_memory "${max_memory_input}" \
-        --save_convergence_data ${save_convergence_data}
+      --instance_path $instance_path \
+      --output_dir $output_dir \
+      --method "pdhg" \
+      --relative_optimality_tol ${tolerance} \
+      --absolute_optimality_tol ${tolerance} \
+      --iteration_limit $iteration_limit \
+      --termination_evaluation_frequency ${termination_evaluation_frequency} \
+      --step_size_policy "constant" \
+      --l_inf_ruiz_iterations 0 \
+      --pock_chambolle_rescaling false \
+      --l2_norm_rescaling false \
+      --restart_scheme "no_restart" \
+      --primal_weight_update_smoothing 0.0 \
+      --scale_invariant_initial_primal_weight false \
+      --steering_vectors true \
+      --fast_dwifob true \
+      --dwifob_option ${dwifob_option} \
+      --max_memory "${max_memory_input}" \
+      --save_convergence_data ${save_convergence_data}
 
   done
 elif [ "$solver" == "dwifob+primal" ]; then
@@ -124,20 +131,21 @@ elif [ "$solver" == "dwifob+primal" ]; then
     instance_path="${HOME}/lp_benchmark/${INSTANCE}.mps.gz"
 
     julia --project=scripts scripts/solve_qp.jl \
-        --instance_path $instance_path \
-        --output_dir $output_dir \
-        --method "pdhg" \
-        --relative_optimality_tol ${tolerance} \
-        --absolute_optimality_tol ${tolerance} \
-        --iteration_limit $iteration_limit \
-        --step_size_policy "constant" \
-        --steering_vectors true \
-        --max_memory "${max_memory_input}" \
-        --fast_dwifob true \
-        --dwifob_option ${dwifob_option} \
-        --dwifob_restart "constant" \
-        --dwifob_restart_frequency 40 \
-        --save_convergence_data ${save_convergence_data}
+      --instance_path $instance_path \
+      --output_dir $output_dir \
+      --method "pdhg" \
+      --relative_optimality_tol ${tolerance} \
+      --absolute_optimality_tol ${tolerance} \
+      --iteration_limit $iteration_limit \
+      --termination_evaluation_frequency ${termination_evaluation_frequency} \
+      --step_size_policy "constant" \
+      --steering_vectors true \
+      --max_memory "${max_memory_input}" \
+      --fast_dwifob true \
+      --dwifob_option ${dwifob_option} \
+      --dwifob_restart "constant" \
+      --dwifob_restart_frequency 40 \
+      --save_convergence_data ${save_convergence_data}
 
   done
 elif [ "$solver" == "dwifob+step_size" ]; then
@@ -147,19 +155,20 @@ elif [ "$solver" == "dwifob+step_size" ]; then
     instance_path="${HOME}/lp_benchmark/${INSTANCE}.mps.gz"
 
         julia --project=scripts scripts/solve_qp.jl \
-        --instance_path $instance_path \
-        --output_dir $output_dir \
-        --method "pdhg" \
-        --relative_optimality_tol ${tolerance} \
-        --absolute_optimality_tol ${tolerance} \
-        --iteration_limit $iteration_limit \
-        --steering_vectors true \
-        --max_memory "${max_memory_input}" \
-        --fast_dwifob true \
-        --dwifob_option ${dwifob_option} \
-        --dwifob_restart "constant" \
-        --dwifob_restart_frequency 40 \
-        --save_convergence_data ${save_convergence_data}
+          --instance_path $instance_path \
+          --output_dir $output_dir \
+          --method "pdhg" \
+          --relative_optimality_tol ${tolerance} \
+          --absolute_optimality_tol ${tolerance} \
+          --iteration_limit $iteration_limit \
+          --termination_evaluation_frequency ${termination_evaluation_frequency} \
+          --steering_vectors true \
+          --max_memory "${max_memory_input}" \
+          --fast_dwifob true \
+          --dwifob_option ${dwifob_option} \
+          --dwifob_restart "constant" \
+          --dwifob_restart_frequency 40 \
+          --save_convergence_data ${save_convergence_data}
 
   done
 elif [ "$solver" == "scs" ]; then  

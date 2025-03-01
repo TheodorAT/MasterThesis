@@ -2836,7 +2836,7 @@ function should_use_inertia(
   # TODO: Perhaps we should use the (weighted) average similarity over multiple iterations?  
   
   # This threshold decides when we should use momentum.
-  similarity_threshold = 0.7
+  similarity_threshold = 0.9
   return similarity >= similarity_threshold
 
 end
@@ -2845,7 +2845,7 @@ function calculate_inertia(
   dwifob_solver_state::DwifobSolverState,
 )
   # Hyperparameters: (this will grow haha)
-  beta = 0.1        # Controls the weight of past steps, more frequent have more impact.
+  beta = 0.5        # Controls the weight of past steps, more frequent have more impact.
   dampening = 0.4   # Controls the size of the momentum term in relation to the steps. 
                     # (Very reasonable to keep this below 0.5)
 
