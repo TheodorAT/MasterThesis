@@ -1,6 +1,6 @@
 # Script for testing the DWIFOB solver: 
 use_fast="false"              # If we want to use the faster version of dwifob. 
-tolerance="1e-4"              # The error tolerance to be used in the solver:
+tolerance="1e-8"              # The error tolerance to be used in the solver:
 save_convergence_data="false"  # If we want to save convergence results to a .json file. 
 save_detailed="false"          # If we want to save the detailed results to a .json file.
 save_summary="true"           # If we want to save the summary to a .csv file
@@ -8,7 +8,7 @@ iteration_limit="5000"        # The iteration limit for each solver and problem.
 
 # The selected solver: (different versions of dwifob) available options: 
 # "dwifob", "+restarts", "+scaling", "+primal_weight", "+step_size"
-solver="+primal_weight"
+solver="+step_size"
 PDLP_restart_scheme="adaptive_normalized"   # Default: "adaptive_normalized", others: "no_restart", 
                                             # "adaptive_localized", "adaptive_distance"
 restart_scheme="constant"                   # Chose between "constant", "PDLP", "NOFOB", anything else means no restarts.
@@ -29,7 +29,7 @@ termination_eval_freq=1           # The frequency of evaluating if we have reach
 # - karted
 # larger: buildingenergy, 
 
-INSTANCE="datt256"
+INSTANCE="nug08-3rd"
 instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 # INSTANCE="less_trivial_lp"
 # instance_path=./test/less_trivial_lp_model.mps

@@ -2759,8 +2759,6 @@ function take_inertial_pdhg_step(
   x_k = solver_state.current_primal_solution
   y_k = solver_state.current_dual_solution
 
-  lambda_k = dwifob_solver_state.lambda_k
-
   if isnan(x_k[1]) 
     println("Got NaN in iterates, aborting...")
     exit(1)
@@ -2815,6 +2813,118 @@ function take_inertial_pdhg_step(
 
   # Updating the changes in the mutable dwifob struct before the next iteration:
   dwifob_solver_state.current_iteration = dwifob_solver_state.current_iteration + 1
+end
+
+"""
+  An inertial variant of PDHG with adaptive step size, using the DWIFOB struct out of convenience for now. 
+"""
+function take_inertial_pdhg_step(
+  step_params::AdaptiveStepsizeParams,
+  problem::QuadraticProgrammingProblem,
+  solver_state::PdhgSolverState,
+  dwifob_solver_state::DwifobSolverState,
+)
+  step_size = solver_state.step_size
+  done = false
+  iter = 0
+
+  while !done
+    iter += 1
+    solver_state.total_number_iterations += 1
+
+    next_primal = compute_next_primal_solution(
+      problem,
+      solver_state.current_primal_solution,
+      solver_state.current_dual_product,
+      step_size,
+      solver_state.primal_weight,
+    )
+
+    next_dual, next_dual_product = compute_next_dual_solution(
+      problem,
+      solver_state.current_primal_solution,
+      next_primal,
+      solver_state.current_dual_solution,
+      step_size,
+      solver_state.primal_weight,
+    )
+
+    ##### Here we should add inertial terms: ##### 
+    # How far back do we remember when calculating the inertial term?
+    m_k = min(dwifob_solver_state.max_memory, dwifob_solver_state.current_iteration)
+    
+    # We store the previous "steps" i.e. differences between iterates,
+    # in the x_hat_iterates list for convenience for now.
+    x_k = solver_state.current_primal_solution
+    y_k = solver_state.current_dual_solution
+
+    if isnan(x_k[1]) 
+      println("Got NaN in iterates, aborting...")
+      exit(1)
+    end
+
+      # Calculating the next iterates:
+    if (m_k != 0 && should_use_inertia(x_k, y_k, next_primal, next_dual, dwifob_solver_state))  
+      # Calculating the inertial terms: 
+      inertial_term_x, inertial_term_y = calculate_inertia(dwifob_solver_state)    
+      next_primal = next_primal + inertial_term_x
+      next_dual = next_dual + inertial_term_y
+      next_dual_product = problem.constraint_matrix' * next_dual
+    end 
+
+    interaction, movement = compute_interaction_and_movement(
+      solver_state,
+      problem,
+      next_primal,
+      next_dual,
+      next_dual_product,
+    )
+    solver_state.cumulative_kkt_passes += 1
+
+    if movement == 0.0
+      # The algorithm will terminate at the beginning of the next iteration
+      solver_state.numerical_error = true
+      break
+    end
+    # The proof of Theorem 1 requires movement / step_size >= interaction.
+    if interaction > 0
+      step_size_limit = movement / interaction
+    else
+      step_size_limit = Inf
+    end
+
+    if step_size <= step_size_limit
+      done = true
+      update_solution_in_solver_state(
+        solver_state,
+        next_primal,
+        next_dual,
+        next_dual_product,
+      )
+
+      # Saving the "movement" from this step in the dwifob solver struct.
+      movement_x = next_primal - x_k
+      movement_y = next_dual - y_k  
+      pushfirst!(dwifob_solver_state.x_hat_iterates, movement_x)
+      pushfirst!(dwifob_solver_state.y_hat_iterates, movement_y)
+
+      # If "memory is full", we forget the movement from the least recent iteration: 
+      if (dwifob_solver_state.current_iteration > m_k) 
+        pop!(dwifob_solver_state.x_hat_iterates)
+        pop!(dwifob_solver_state.y_hat_iterates)
+      end
+
+      # Updating the changes in the mutable dwifob struct before the next iteration:
+      dwifob_solver_state.current_iteration = dwifob_solver_state.current_iteration + 1
+    end
+
+    first_term = (step_size_limit * 
+      (1 - (solver_state.total_number_iterations + 1)^(-step_params.reduction_exponent)))
+    second_term = (step_size * 
+      (1 + (solver_state.total_number_iterations + 1)^(-step_params.growth_exponent)))
+    step_size = min(first_term, second_term)
+  end
+  solver_state.step_size = step_size
 end
 
 function should_use_inertia(
