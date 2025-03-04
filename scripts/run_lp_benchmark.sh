@@ -11,7 +11,7 @@
 #   scs (which uses scs, a free to use solver in Julia)
 
 solver="inertial_PDHG+step_size"
-tolerance="1e-4"        # This is the error tolerance to be used in the solver.
+tolerance="1e-8"        # This is the error tolerance to be used in the solver.
 iteration_limit="10000" # Iteration limit for the test run. 
 dwifob_option="inertial_PDHG"           # Chose between "alt_A", "alt_B", "alt_C", "inertial_PDHG", 
                                         # anything else means the original.
@@ -26,13 +26,13 @@ while IFS= read -r line; do
 done < "./benchmarking/lp_benchmark_instance_list"
 
 save_convergence_data="false"
-max_memory_input="[3]"
+max_memory_input="[1]"
 dwifob_option="inertial_PDHG"
 
 # declare -a instances=("nug08-3rd") # For testing the script
 experiment_name="fast_lp_benchmark_${solver}__${tolerance}_m=${max_memory_input}"
 experiment_name="fast_lp_benchmark_${solver}_${tolerance}"
-experiment_name="fast_lp_benchmark_${solver}_${tolerance}_m=${max_memory_input}"
+experiment_name="fast_lp_benchmark_${solver}_faster_${tolerance}_m=${max_memory_input}"
 
 # Below are no more settings:
 output_dir="./results/${experiment_name}"

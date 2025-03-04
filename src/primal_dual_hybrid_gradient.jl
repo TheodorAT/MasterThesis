@@ -1299,7 +1299,10 @@ function optimize(
       elseif params.dwifob_option == "alt_C"
         take_dwifob_step_alt_C(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
       elseif params.dwifob_option == "inertial_PDHG"
-        take_inertial_pdhg_step(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
+        # take_inertial_pdhg_step(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
+        take_inertial_pdhg_step_faster(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
+      elseif params.dwifob_option == "AA_PDHG"
+        take_anderson_pdhg_step(params.step_size_policy_params, problem, solver_state, dwifob_solver_state)
       elseif params.fast_dwifob
         take_dwifob_step_efficient(params.step_size_policy_params, problem, solver_state, dwifob_solver_state, dwifob_matrix_cache)
       else
@@ -2742,6 +2745,29 @@ function take_dwifob_step_alt_C(
   push!(dwifob_solver_state.y_hat_iterates, y_hat_next)  
 end
 
+function should_use_inertia(
+  x_cur::Vector{Float64}, 
+  y_cur::Vector{Float64},
+  x_next::Vector{Float64}, 
+  y_next::Vector{Float64},
+  dwifob_solver_state::DwifobSolverState,
+) 
+  cur_movement = [(x_next - x_cur); (y_next - y_cur)]
+  prev_movement = [first(dwifob_solver_state.x_hat_iterates); first(dwifob_solver_state.y_hat_iterates)]
+  
+  # If the past two steps are of sufficiently similar direction, we want to add inertia, otherwise not.  
+  cur_movement_unit = cur_movement / norm(cur_movement, 2)
+  prev_movement_unit = prev_movement / norm(prev_movement, 2)
+
+  similarity = cur_movement_unit' * prev_movement_unit  
+  # println("Similarity: ", similarity)
+  # TODO: Perhaps we should use the (weighted) average similarity over multiple iterations?  
+  
+  # This threshold decides when we should use momentum.
+  similarity_threshold = 0.9
+  return similarity >= similarity_threshold
+end
+
 """
   An inertial variant of PDHG, using the DWIFOB struct out of convenience for now. 
 """
@@ -2927,30 +2953,8 @@ function take_inertial_pdhg_step(
   solver_state.step_size = step_size
 end
 
-function should_use_inertia(
-  x_cur::Vector{Float64}, 
-  y_cur::Vector{Float64},
-  x_next::Vector{Float64}, 
-  y_next::Vector{Float64},
-  dwifob_solver_state::DwifobSolverState,
-)
-  cur_movement = [(x_next - x_cur); (y_next - y_cur)]
-  prev_movement = [first(dwifob_solver_state.x_hat_iterates); first(dwifob_solver_state.y_hat_iterates)]
-  
-  # If the past two steps are of sufficiently similar direction, we want to add inertia, otherwise not.  
-  cur_movement_unit = cur_movement / norm(cur_movement, 2)
-  prev_movement_unit = prev_movement / norm(prev_movement, 2)
-
-  similarity = cur_movement_unit' * prev_movement_unit  
-  # println("Similarity: ", similarity)
-  # TODO: Perhaps we should use the (weighted) average similarity over multiple iterations?  
-  
-  # This threshold decides when we should use momentum.
-  similarity_threshold = 0.9
-  return similarity >= similarity_threshold
-
-end
-
+# TODO: Make this function also return the product K' * vector_y, saving the products 
+# K' y_i in structs and then adding them here, calculating it without an extra 0.5 KKT pass 
 function calculate_inertia(
   dwifob_solver_state::DwifobSolverState,
 )
@@ -2972,4 +2976,297 @@ function calculate_inertia(
   vector_y = vector_y * dampening / count
   
   return vector_x, vector_y
+end
+
+
+"""
+  An inertial variant of PDHG with adaptive step size, using the DWIFOB struct out of convenience for now. 
+"""
+function take_inertial_pdhg_step_faster(
+  step_params::AdaptiveStepsizeParams,
+  problem::QuadraticProgrammingProblem,
+  solver_state::PdhgSolverState,
+  dwifob_solver_state::DwifobSolverState,
+)
+  step_size = solver_state.step_size
+  done = false
+  iter = 0
+
+  while !done
+    iter += 1
+    solver_state.total_number_iterations += 1
+
+    next_primal = compute_next_primal_solution(
+      problem,
+      solver_state.current_primal_solution,
+      solver_state.current_dual_product,
+      step_size,
+      solver_state.primal_weight,
+    )
+
+    next_dual, next_dual_product = compute_next_dual_solution(
+      problem,
+      solver_state.current_primal_solution,
+      next_primal,
+      solver_state.current_dual_solution,
+      step_size,
+      solver_state.primal_weight,
+    )
+
+    ##### Here we should add inertial terms: ##### 
+    # How far back do we remember when calculating the inertial term?
+    m_k = min(dwifob_solver_state.max_memory, dwifob_solver_state.current_iteration)
+    
+    # We store the previous "steps" i.e. differences between iterates,
+    # in the x_hat_iterates list for convenience for now.
+    x_k = solver_state.current_primal_solution
+    y_k = solver_state.current_dual_solution
+
+    if isnan(x_k[1]) 
+      println("Got NaN in iterates, aborting...")
+      exit(1)
+    end
+
+      # Calculating the next iterates:
+    if (m_k != 0 && should_use_inertia(x_k, y_k, next_primal, next_dual, dwifob_solver_state))  
+      # Calculating the inertial terms: 
+      inertial_term_x, inertial_term_y, inertal_term_dual_product = calculate_inertia_faster(dwifob_solver_state)    
+      next_primal = next_primal + inertial_term_x
+      next_dual = next_dual + inertial_term_y
+      next_dual_product = next_dual_product + inertal_term_dual_product 
+
+      # Below for checking that the implementation is correct
+      # other_next_dual_product = problem.constraint_matrix' * next_dual
+      # differences = norm(next_dual_product - other_next_dual_product, 2)
+      # println("Difference of dual products: ", differences)
+    end 
+
+    interaction, movement = compute_interaction_and_movement(
+      solver_state,
+      problem,
+      next_primal,
+      next_dual,
+      next_dual_product,
+    )
+    solver_state.cumulative_kkt_passes += 1
+
+    if movement == 0.0
+      # The algorithm will terminate at the beginning of the next iteration
+      solver_state.numerical_error = true
+      break
+    end
+    # The proof of Theorem 1 requires movement / step_size >= interaction.
+    if interaction > 0
+      step_size_limit = movement / interaction
+    else
+      step_size_limit = Inf
+    end
+
+    if step_size <= step_size_limit
+      done = true
+    
+      # Saving the "movement" from this step in the dwifob solver struct.
+      movement_x = next_primal - x_k
+      movement_y = next_dual - y_k
+      dual_movement_product = next_dual_product - solver_state.current_dual_product
+      pushfirst!(dwifob_solver_state.x_hat_iterates, movement_x)
+      pushfirst!(dwifob_solver_state.y_hat_iterates, movement_y)
+      pushfirst!(dwifob_solver_state.dual_iterates, dual_movement_product)
+
+      # If "memory is full", we forget the movement from the least recent iteration: 
+      if (dwifob_solver_state.current_iteration > m_k) 
+        pop!(dwifob_solver_state.x_hat_iterates)
+        pop!(dwifob_solver_state.y_hat_iterates)
+        pop!(dwifob_solver_state.dual_iterates)
+      end
+
+      update_solution_in_solver_state(
+        solver_state,
+        next_primal,
+        next_dual,
+        next_dual_product,
+      )
+      # Updating the changes in the mutable dwifob struct before the next iteration:
+      dwifob_solver_state.current_iteration = dwifob_solver_state.current_iteration + 1
+    end
+
+    first_term = (step_size_limit * 
+      (1 - (solver_state.total_number_iterations + 1)^(-step_params.reduction_exponent)))
+    second_term = (step_size * 
+      (1 + (solver_state.total_number_iterations + 1)^(-step_params.growth_exponent)))
+    step_size = min(first_term, second_term)
+  end
+  solver_state.step_size = step_size
+end
+
+function calculate_inertia_faster(
+  dwifob_solver_state::DwifobSolverState,
+)
+  # Hyperparameters:
+  beta = 0.5        # Controls the weight of past steps, more frequent have more impact.
+  dampening = 0.4   # Controls the size of the momentum term in relation to the steps. 
+                    # (Very reasonable to keep this below 0.5)
+
+  # Calculate the average movement from the last iterates (stored in hat_iterates for this purpose):
+  vector_x = zeros(size(last(dwifob_solver_state.x_hat_iterates)))
+  vector_y = zeros(size(last(dwifob_solver_state.y_hat_iterates)))
+  K_trans_vector_y = zeros(size(last(dwifob_solver_state.dual_iterates)))
+  count = 0
+  for (step_x, step_y, step_y_dual_product) in zip(
+    dwifob_solver_state.x_hat_iterates, 
+    dwifob_solver_state.y_hat_iterates, 
+    dwifob_solver_state.dual_iterates
+  )  
+    vector_x += step_x * (beta^count)
+    vector_y += step_y * (beta^count)
+    K_trans_vector_y += step_y_dual_product * (beta^count)
+    count += 1
+  end  
+  vector_x = vector_x * dampening / count
+  vector_y = vector_y * dampening / count
+  K_trans_vector_y = K_trans_vector_y * dampening / count
+  return vector_x, vector_y, K_trans_vector_y
+end
+
+"""
+  An Anderson Accelerated variant of PDHG, using the DWIFOB struct out of convenience for now. 
+"""
+function take_anderson_pdhg_step(
+  step_params::ConstantStepsizeParams,
+  problem::QuadraticProgrammingProblem,
+  solver_state::PdhgSolverState,
+  dwifob_solver_state::DwifobSolverState,
+)
+  # Initializing the hat variables of the algorithm:
+  if (dwifob_solver_state.current_iteration == 0)
+    pushfirst!(dwifob_solver_state.x_hat_iterates, solver_state.current_primal_solution)
+    pushfirst!(dwifob_solver_state.y_hat_iterates, solver_state.current_dual_solution)
+  end
+
+  m_k = min(dwifob_solver_state.max_memory, dwifob_solver_state.current_iteration)
+  # Extracting some variables from the solver state struct
+  # for clearer and more concise code:  
+
+  x_k = solver_state.current_primal_solution
+  y_k = solver_state.current_dual_solution
+
+  step_size = solver_state.step_size
+  primal_weight = solver_state.primal_weight
+
+  if isnan(x_k[1]) 
+    println("Got NaN in iterates, aborting...")
+    exit(1)
+  end
+
+  primal_gradient = problem.objective_vector .- solver_state.current_dual_product
+  g_x_k = x_k .- (step_size / primal_weight) .* primal_gradient
+  
+  # The AA for the primal iterates:
+  pushfirst!(dwifob_solver_state.primal_iterates, g_x_k)
+  if (m_k < dwifob_solver_state.current_iteration) 
+    pop!(dwifob_solver_state.primal_iterates)
+    pop!(dwifob_solver_state.x_hat_iterates)
+  end
+
+  R_k_primal = dwifob_solver_state.primal_iterates - dwifob_solver_state.x_hat_iterates
+  R_k_primal = reduce(hcat, R_k_primal)
+  alpha_k_primal = calculate_anderson_acceleration(solver_state, R_k_primal, m_k)
+
+  # Calculating the next primal iterates from the AA: 
+  x_hat_next = zeros(size(x_k))
+  for (primal_i, alpha_i) in zip(dwifob_solver_state.primal_iterates, alpha_k_primal)
+    x_hat_next = x_hat_next + (primal_i * alpha_i)
+  end 
+  x_next = copy(x_hat_next)
+  project_primal!(x_next, problem)
+
+  dual_gradient = problem.right_hand_side .- problem.constraint_matrix * (2 .* x_next - x_k)
+  g_y_k = y_k .+ (primal_weight * step_size) .* dual_gradient
+  
+  # The AA for the dual iterates: 
+  pushfirst!(dwifob_solver_state.dual_iterates, g_y_k)
+  if (m_k < dwifob_solver_state.current_iteration) 
+    pop!(dwifob_solver_state.dual_iterates)
+    pop!(dwifob_solver_state.y_hat_iterates)
+  end
+  R_k_dual = dwifob_solver_state.primal_iterates - dwifob_solver_state.x_hat_iterates
+  R_k_dual = reduce(hcat, R_k_dual)
+  alpha_k_dual = calculate_anderson_acceleration(solver_state, R_k_dual, m_k)
+
+  # Calculating the next primal iterates from the AA: 
+  y_hat_next = zeros(size(y_k))
+  for (dual_i, alpha_i) in zip(dwifob_solver_state.dual_iterates, alpha_k_dual)
+    y_hat_next = y_hat_next + (dual_i * alpha_i)
+  end 
+  y_next = copy(y_hat_next)
+  project_dual!(y_next, problem)
+  next_dual_product = problem.constraint_matrix' * y_next
+
+  update_solution_in_solver_state(
+    solver_state,
+    x_next,
+    y_next,
+    next_dual_product,
+  )
+  # Each iteration of this dwifob implementation calculates a matrix calculation 
+  # using the constraint matrix: K: 3 times, and K^T 3 times. (1 each for steps, 1 each for the 2 M-norms) 
+  solver_state.cumulative_kkt_passes += 1
+  
+  # Updating the changes in the mutable dwifob struct before the next iteration:
+  dwifob_solver_state.current_iteration = dwifob_solver_state.current_iteration + 1
+  pushfirst!(dwifob_solver_state.x_hat_iterates, x_hat_next)
+  pushfirst!(dwifob_solver_state.y_hat_iterates, y_hat_next)  
+
+  # # Calculating the primal gradient and p_x_k:
+  # # Preparing the input for the Andersson Acceleration:
+  # pushfirst!(dwifob_solver_state.primal_iterates, p_x_k)
+  # pushfirst!(dwifob_solver_state.dual_iterates, p_y_k)
+  # if (m_k < dwifob_solver_state.current_iteration) 
+  #   pop!(dwifob_solver_state.primal_iterates)
+  #   pop!(dwifob_solver_state.dual_iterates)
+  #   pop!(dwifob_solver_state.x_hat_iterates)
+  #   pop!(dwifob_solver_state.y_hat_iterates)
+  # end
+
+  # # Calculating R_k for the RAA:   
+  # R_k_primal = dwifob_solver_state.primal_iterates - dwifob_solver_state.x_hat_iterates
+  # R_k_dual = dwifob_solver_state.dual_iterates - dwifob_solver_state.y_hat_iterates
+  # # Converting to matrixes for easier calculations: 
+  # R_k_primal = reduce(hcat, R_k_primal)
+  # R_k_dual = reduce(hcat, R_k_dual)
+  # # Finally, forming R_k and calculating the RAA:
+  # R_k = vcat(R_k_primal, R_k_dual)
+  # alpha_k = calculate_anderson_acceleration(solver_state, R_k, m_k)
+
+  # # Calculating the next iterates from the AA: 
+  # x_hat_next = zeros(size(x_k))
+  # y_hat_next = zeros(size(y_k))
+  # println("alpha: ", alpha_k)
+  # for (primal_i, dual_i, alpha_i) in zip(dwifob_solver_state.primal_iterates, dwifob_solver_state.dual_iterates, alpha_k)
+  #   x_hat_next = x_hat_next + (primal_i * alpha_i)
+  #   y_hat_next = y_hat_next + (dual_i * alpha_i)
+  # end 
+
+  # # Calculating the next iterates:
+  # x_next = copy(p_x_k)
+  # y_next = copy(p_y_k)
+  # project_primal!(p_x_k, problem)
+  # project_dual!(p_y_k, problem)
+  # K_trans_y_next = problem.constraint_matrix' * p_y_k
+
+  # # # Update the solver state: 
+  # update_solution_in_solver_state(
+  #   solver_state,
+  #   p_x_k,
+  #   p_y_k,
+  #   K_trans_y_next,
+  # )
+  # # Each iteration of this dwifob implementation calculates a matrix calculation 
+  # # using the constraint matrix: K: 3 times, and K^T 3 times. (1 each for steps, 1 each for the 2 M-norms) 
+  # solver_state.cumulative_kkt_passes += 1
+  
+  # # Updating the changes in the mutable dwifob struct before the next iteration:
+  # dwifob_solver_state.current_iteration = dwifob_solver_state.current_iteration + 1
+  # pushfirst!(dwifob_solver_state.x_hat_iterates, x_hat_next)
+  # pushfirst!(dwifob_solver_state.y_hat_iterates, y_hat_next)  
 end
