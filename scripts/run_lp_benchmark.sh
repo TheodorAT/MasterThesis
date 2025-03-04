@@ -7,9 +7,11 @@
 #   dwifob+primal (uses dwifob + PDLP optimizations up to primal weight update.)
 #   pdlp (which uses pdhg including optimizations made in the google research papers)
 #   dwifob+step_size (uses dwifob + PDLP optimizations up to dynamic step size.)
+#   inertial_PDHG+step_size (uses inertial pdhg + PDLP optimizations up to dynamic step size.)
 #   scs (which uses scs, a free to use solver in Julia)
-solver="dwifob+step_size"
-tolerance="1e-8"        # This is the error tolerance to be used in the solver.
+
+solver="inertial_PDHG+step_size"
+tolerance="1e-4"        # This is the error tolerance to be used in the solver.
 iteration_limit="10000" # Iteration limit for the test run. 
 dwifob_option="inertial_PDHG"           # Chose between "alt_A", "alt_B", "alt_C", "inertial_PDHG", 
                                         # anything else means the original.
@@ -24,13 +26,13 @@ while IFS= read -r line; do
 done < "./benchmarking/lp_benchmark_instance_list"
 
 save_convergence_data="false"
-max_memory_input="[1]"
+max_memory_input="[3]"
 dwifob_option="inertial_PDHG"
 
 # declare -a instances=("nug08-3rd") # For testing the script
 experiment_name="fast_lp_benchmark_${solver}__${tolerance}_m=${max_memory_input}"
 experiment_name="fast_lp_benchmark_${solver}_${tolerance}"
-experiment_name="fast_lp_benchmark_${solver}_${dwifob_option}_${tolerance}_m=${max_memory_input}"
+experiment_name="fast_lp_benchmark_${solver}_${tolerance}_m=${max_memory_input}"
 
 # Below are no more settings:
 output_dir="./results/${experiment_name}"
@@ -155,21 +157,43 @@ elif [ "$solver" == "dwifob+step_size" ]; then
     echo "Solving ${INSTANCE} with dwifob+step_size..."
     instance_path="${HOME}/lp_benchmark/${INSTANCE}.mps.gz"
 
-        julia --project=scripts scripts/solve_qp.jl \
-          --instance_path $instance_path \
-          --output_dir $output_dir \
-          --method "pdhg" \
-          --relative_optimality_tol ${tolerance} \
-          --absolute_optimality_tol ${tolerance} \
-          --iteration_limit $iteration_limit \
-          --termination_evaluation_frequency ${termination_evaluation_frequency} \
-          --steering_vectors true \
-          --max_memory "${max_memory_input}" \
-          --fast_dwifob true \
-          --dwifob_option ${dwifob_option} \
-          --dwifob_restart "constant" \
-          --dwifob_restart_frequency 40 \
-          --save_convergence_data ${save_convergence_data}
+    julia --project=scripts scripts/solve_qp.jl \
+      --instance_path $instance_path \
+      --output_dir $output_dir \
+      --method "pdhg" \
+      --relative_optimality_tol ${tolerance} \
+      --absolute_optimality_tol ${tolerance} \
+      --iteration_limit $iteration_limit \
+      --termination_evaluation_frequency ${termination_evaluation_frequency} \
+      --steering_vectors true \
+      --max_memory "${max_memory_input}" \
+      --fast_dwifob true \
+      --dwifob_option ${dwifob_option} \
+      --dwifob_restart "constant" \
+      --dwifob_restart_frequency 40 \
+      --save_convergence_data ${save_convergence_data}
+
+  done
+elif [ "$solver" == "inertial_PDHG+step_size" ]; then
+  for INSTANCE in "${instances[@]}" 
+  do
+    echo "Solving ${INSTANCE} with inertial_PDHG+step_size..."
+    instance_path="${HOME}/lp_benchmark/${INSTANCE}.mps.gz"
+
+    julia --project=scripts scripts/solve_qp.jl \
+      --instance_path $instance_path \
+      --output_dir $output_dir \
+      --method "pdhg" \
+      --relative_optimality_tol ${tolerance} \
+      --absolute_optimality_tol ${tolerance} \
+      --iteration_limit $iteration_limit \
+      --termination_evaluation_frequency ${termination_evaluation_frequency} \
+      --steering_vectors true \
+      --max_memory "${max_memory_input}" \
+      --dwifob_option "inertial_PDHG" \
+      --dwifob_restart "constant" \
+      --dwifob_restart_frequency 40 \
+      --save_convergence_data ${save_convergence_data}
 
   done
 elif [ "$solver" == "scs" ]; then  
@@ -185,7 +209,7 @@ elif [ "$solver" == "scs" ]; then
   done
 fi
 
-echo "All problems solved, storing data in csv format..."
+echo "All problems solved, storing data in file: ./results/${experiment_name}.csv"
 
 ## Storing the results in CSV file using the process_json_to_csv.jl script:
 echo '{"datasets": [
