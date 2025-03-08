@@ -2784,9 +2784,9 @@ function should_use_inertia(
   similarity = cur_movement_unit' * prev_movement_unit  
   # println("Similarity: ", similarity)
   # TODO: Perhaps we should use the (weighted) average similarity over multiple iterations?  
-  
+  # TODO: Maybe return the similarity, and use that as a weight for the inertial terms as well.
   # This threshold decides when we should use momentum.
-  similarity_threshold = 0.9
+  similarity_threshold = 0.90
   return similarity >= similarity_threshold
 end
 
@@ -2866,6 +2866,8 @@ end
 """
   An inertial variant of PDHG with adaptive step size, using the DWIFOB struct out of convenience for now. 
 """
+# TODO: Should we do proj after inertia, probably. 
+# Especially if the largest inertia losers have a lot of single contraints, that are affected by proj.  
 function take_inertial_pdhg_step(
   step_params::AdaptiveStepsizeParams,
   problem::QuadraticProgrammingProblem,
@@ -2912,7 +2914,7 @@ function take_inertial_pdhg_step(
     end
 
       # Calculating the next iterates:
-    if (m_k != 0 && should_use_inertia(x_k, y_k, next_primal, next_dual, dwifob_solver_state))  
+    if (m_k > 0 && should_use_inertia(x_k, y_k, next_primal, next_dual, dwifob_solver_state))  
       # Calculating the inertial terms: 
       inertial_term_x, inertial_term_y = calculate_inertia(dwifob_solver_state)    
       next_primal = next_primal + inertial_term_x
@@ -2975,8 +2977,6 @@ function take_inertial_pdhg_step(
   solver_state.step_size = step_size
 end
 
-# TODO: Make this function also return the product K' * vector_y, saving the products 
-# K' y_i in structs and then adding them here, calculating it without an extra 0.5 KKT pass 
 function calculate_inertia(
   dwifob_solver_state::DwifobSolverState,
 )

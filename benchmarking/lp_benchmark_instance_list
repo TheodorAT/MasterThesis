@@ -30,37 +30,40 @@
 # savsched1
 # self
 # ts-palko
-# # The ones below take a little longer, only include in final test runs:
+# The ones below take a little longer, only include in final test runs:
 # fome13
 # neos5052403
 # set-cover
 # stat96v1
 # stormG2_1000
 # stp3d
-# These are the larest losers from inertia
+# These are the largest losers from inertia: Could they have a lot of contraints with one var? ANS: NO. 
+# ^^^^ Should we do proj after inertia? We should try Nesterov Acceleration as well.
 # buildingenergy
 # degme
-# Largest winner from inertia
+# # Largest winner from inertia
 # L1_sixm250obs
-# The ones below cannot be solved with less than 10000 iterations:
+# The ones below cannot be solved to 1e-4 with less than 10000 iterations:
+# pds-100
+# rail4284 
+# support10
+# tp-6
+# The ones below require 30000+ iterations for 1e-4 (PDLP)
+# s250r10
+# irish-e
+# The ones below cannot be solved to 1e-4 with less than 50000 (PDLP) iterations:
+# ds-big
 # cont1
 # cont11
-ds-big
-irish-e
-Linf_520c
-neos
+# Linf_520c
+# neos
 ns1687037
 ns1688926
-pds-100
 psched3-3
 rail02
-rail4284 
 s100
-s250r10
 shs1023
 square41
-support10
-tp-6
 ### Below took really, really long... we skip it for now. (my poor computer)
 # L1_sixm1000obs
 ### These are excluded since they did not work with pdlp.

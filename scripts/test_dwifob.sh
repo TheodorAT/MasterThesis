@@ -1,21 +1,21 @@
 # Script for testing the DWIFOB solver: 
 use_fast="false"              # If we want to use the faster version of dwifob. 
-tolerance="1e-8"              # The error tolerance to be used in the solver:
+tolerance="1e-4"              # The error tolerance to be used in the solver:
 save_convergence_data="false"  # If we want to save convergence results to a .json file. 
 save_detailed="false"          # If we want to save the detailed results to a .json file.
 save_summary="true"           # If we want to save the summary to a .csv file
-iteration_limit="5000"        # The iteration limit for each solver and problem.
+iteration_limit="20000"        # The iteration limit for each solver and problem.
 
 # The selected solver: (different versions of dwifob) available options: 
 # "dwifob", "+restarts", "+scaling", "+primal_weight", "+step_size"
-solver="+primal_weight"
+solver="+step_size"
 PDLP_restart_scheme="adaptive_normalized"   # Default: "adaptive_normalized", others: "no_restart", 
                                             # "adaptive_localized", "adaptive_distance"
 restart_scheme="constant"                   # Chose between "constant", "PDLP", "NOFOB", anything else means no restarts.
 restart_frequency=40
-dwifob_option="AA_PDHG"           # Chose between "alt_A", "alt_B", "alt_C", "inertial_PDHG", "AA_PDHG"
+dwifob_option="inertial_PDHG"           # Chose between "alt_A", "alt_B", "alt_C", "inertial_PDHG", "AA_PDHG"
                                         # anything else means the original implementation.
-termination_eval_freq=1           # The frequency of evaluating if we have reached 
+termination_eval_freq=40           # The frequency of evaluating if we have reached 
                                   # the solution, this also affects the granularity of the saved results.
 
 # Select the instance: 
@@ -27,9 +27,10 @@ termination_eval_freq=1           # The frequency of evaluating if we have reach
 # - savsched1
 # - neos3
 # - karted
+# - fome13
 # larger: buildingenergy, 
 
-INSTANCE="nug08-3rd"
+INSTANCE="buildingenergy"
 instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 # INSTANCE="less_trivial_lp"
 # instance_path=./test/less_trivial_lp_model.mps
@@ -39,13 +40,13 @@ instance_path=${HOME}/lp_benchmark/${INSTANCE}.mps.gz
 # experiment_name="${INSTANCE}_dwifob_${solver}_restart=PDLP_${tolerance}"
 experiment_name="${INSTANCE}_dwifob_${solver}_${tolerance}"
 experiment_name="${INSTANCE}_dwifob_${dwifob_option}_${solver}_restart=${restart_frequency}_terminationfreq=40_${tolerance}"
-experiment_name="${INSTANCE}_${solver}_${dwifob_option}_${tolerance}"
+experiment_name="${INSTANCE}_${solver}_${dwifob_option}_threshold=0.90_dampening=0.3_${tolerance}"
 output_file_base="./results/${experiment_name}"
 
 declare -a max_memory_list=(1 2 3 4 5 6 7 10 15 20 30 40) 
 declare -a max_memory_list=(1 3 5 10 15 20 40) 
 declare -a max_memory_list=(0 1 2 3 4 5)
-declare -a max_memory_list=(0 1 2 3 5 8 10 15)
+declare -a max_memory_list=(1)
 # declare -a max_memory_list=(30 40) # These are the ones that we have not yet done for buildingenergy.
 
 #### Below this point there are no more settings: #####
