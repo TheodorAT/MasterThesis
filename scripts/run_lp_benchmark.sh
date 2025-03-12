@@ -10,10 +10,10 @@
 #   inertial_PDHG+step_size (uses inertial pdhg + PDLP optimizations up to dynamic step size.)
 #   scs (which uses scs, a free to use solver in Julia)
 presolving="false"
-solver="inertial_PDHG+step_size"
+solver="dwifob+primal"
 tolerance="1e-4"        # This is the error tolerance to be used in the solver.
-iteration_limit="100000" # Iteration limit for the test run. 
-dwifob_option="inertial_PDHG"           # Chose between "alt_A", "alt_B", "alt_C", "inertial_PDHG", 
+iteration_limit="10000" # Iteration limit for the test run. 
+dwifob_option="momentum_steering"           # Chose between "alt_A", "alt_B", "alt_C", "inertial_PDHG", 
                                         # anything else means the original.
 termination_evaluation_frequency=40    # How often we should check for termination and restarts.  
 
@@ -27,13 +27,12 @@ done < "./benchmarking/lp_benchmark_instance_list"
 
 save_convergence_data="false"
 max_memory_input="[1]"
-dwifob_option="inertial_PDHG"
 
 # declare -a instances=("nug08-3rd") # For testing the script
 experiment_name="fast_lp_benchmark_${solver}__${tolerance}_m=${max_memory_input}"
 experiment_name="fast_lp_benchmark_${solver}_${tolerance}"
-experiment_name="lp_benchmark_${solver}_${tolerance}"
-experiment_name="lp_benchmark_${solver}_${tolerance}_dampening=0.4_threshold=0.9_m=${max_memory_input}"
+experiment_name="fast_lp_benchmark_${solver}_${tolerance}"
+experiment_name="fast_lp_benchmark_${dwifob_option}_lambda=1_kappa=0.8_threshold=0.9_${tolerance}"
 
 # Below are no more settings:
 output_dir="./results/${experiment_name}"
@@ -216,14 +215,14 @@ elif [ "$solver" == "scs" ]; then
   done
 fi
 
-echo "All problems solved, storing data in file: ./results/${experiment_name}.csv"
+echo "All problems solved, storing data in file: ./results_csv/${experiment_name}.csv"
 
 ## Storing the results in CSV file using the process_json_to_csv.jl script:
 echo '{"datasets": [
    {"config": {"solver": "'${solver}'", "tolerance": "'${tolerance}'"}, "logs_directory": "'${output_dir}'"}
 ], "config_labels": ["solver", "tolerance"]}' > ./results/layout.json
 
-julia --project=benchmarking benchmarking/process_json_to_csv.jl ./results/layout.json ./results/${experiment_name}.csv
+julia --project=benchmarking benchmarking/process_json_to_csv.jl ./results/layout.json ./results_csv/${experiment_name}.csv
 
 # DO NOT REMOVE THE OUTPUT DIR, THOSE RESULTS TAKE HOURS TO GET!!!
 rm ./results/layout.json

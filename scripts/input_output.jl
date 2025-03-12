@@ -484,7 +484,7 @@ function parse_command_line()
       "Whether or not to save the convergence data to an easy to read JSON file." *
       "Used in convergence plots, when plotting relative duality gap against iterations."
     arg_type = Bool
-    default = true
+    default = false
 
     "--save_detailed_convergence_data"
     help =

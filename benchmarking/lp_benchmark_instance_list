@@ -18,18 +18,18 @@
 # dropped, and set-cover had been added.
 #
 # We only select the ones where we didnt solve in 10000 iterations now.  
-# Faster ones below, for smaller testing and modeling: 
+# Faster ones below, for smaller testing and modeling (fast_lp_benchmark): 
 # The instance: neos3 causes dwifob to crash, gives negative root argument... Debug in the future.
-# neos3   
-# chrom1024-7
-# ex10
-# karted
-# datt256
-# nug08-3rd
-# qap15
-# savsched1
-# self
-# ts-palko
+neos3   
+chrom1024-7
+ex10
+karted
+datt256
+nug08-3rd
+qap15
+savsched1
+self
+ts-palko
 # The ones below take a little longer, only include in final test runs:
 # fome13
 # neos5052403
@@ -37,8 +37,7 @@
 # stat96v1
 # stormG2_1000
 # stp3d
-# These are the largest losers from inertia: Could they have a lot of contraints with one var? ANS: NO. 
-# ^^^^ Should we do proj after inertia? We should try Nesterov Acceleration as well.
+# These are the largest losers from inertia:
 # buildingenergy
 # degme
 # # Largest winner from inertia
@@ -57,13 +56,13 @@
 # cont11
 # Linf_520c
 # neos
-ns1687037
-ns1688926
-psched3-3
-rail02
-s100
-shs1023
-square41
+# ns1687037
+# ns1688926
+# psched3-3
+# rail02
+# s100
+# shs1023
+# square41
 ### Below took really, really long... we skip it for now. (my poor computer)
 # L1_sixm1000obs
 ### These are excluded since they did not work with pdlp.

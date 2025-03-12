@@ -7,10 +7,11 @@ tolerance="1e-4"
 solver="dwifob"
 use_steering="true"
 instance_path=./test/trivial_lp_model.mps
+steering_vector_option="momentum_steering"
 experiment_name="trivial_test_${solver}_${tolerance}"
 output_file_base="./results/${experiment_name}"
 
-declare -a max_memory_list=(3) 
+declare -a max_memory_list=(1) 
 
 # Bulding a string for the max memory input to the julia program: 
 max_memory_input="["
@@ -20,7 +21,7 @@ do
 done
 max_memory_input="${max_memory_input::-2}]"
 
-echo "Solving lp with ${solver}..."
+echo "Solving lp with ${solver}, ${steering_vector_option}..."
 
   julia --project=scripts scripts/test_solver.jl \
         --instance_path $instance_path \
@@ -38,8 +39,8 @@ echo "Solving lp with ${solver}..."
         --scale_invariant_initial_primal_weight false \
         --steering_vectors ${use_steering} \
         --max_memory "${max_memory_input}" \
-        --fast_dwifob true \
-        --dwifob_option "alt_A"
+        --fast_dwifob false \
+        --dwifob_option ${steering_vector_option}
 
 # Removing the temporary files:
 for max_memory in "${max_memory_list[@]}" 
