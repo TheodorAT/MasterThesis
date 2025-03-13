@@ -10,8 +10,8 @@
 #   inertial_PDHG+step_size (uses inertial pdhg + PDLP optimizations up to dynamic step size.)
 #   scs (which uses scs, a free to use solver in Julia)
 presolving="false"
-solver="dwifob+primal"
-tolerance="1e-4"        # This is the error tolerance to be used in the solver.
+solver="dwifob+step_size"
+tolerance="1e-8"        # This is the error tolerance to be used in the solver.
 iteration_limit="10000" # Iteration limit for the test run. 
 dwifob_option="momentum_steering"           # Chose between "alt_A", "alt_B", "alt_C", "inertial_PDHG", 
                                         # anything else means the original.
@@ -27,12 +27,12 @@ done < "./benchmarking/lp_benchmark_instance_list"
 
 save_convergence_data="false"
 max_memory_input="[1]"
-
+# TODO: Test with threshold = -1.0, see if 
 # declare -a instances=("nug08-3rd") # For testing the script
 experiment_name="fast_lp_benchmark_${solver}__${tolerance}_m=${max_memory_input}"
 experiment_name="fast_lp_benchmark_${solver}_${tolerance}"
 experiment_name="fast_lp_benchmark_${solver}_${tolerance}"
-experiment_name="fast_lp_benchmark_${dwifob_option}_lambda=1_kappa=0.8_threshold=0.9_${tolerance}"
+experiment_name="fast_lp_benchmark_${solver}_${dwifob_option}_lambda=1_kappa=0.9_no_threshold_${tolerance}"
 
 # Below are no more settings:
 output_dir="./results/${experiment_name}"
